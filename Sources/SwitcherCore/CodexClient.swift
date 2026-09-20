@@ -78,19 +78,7 @@ private final class LinePump: @unchecked Sendable {
     private var waiters: [CheckedContinuation<Data?, any Error>] = []
     private var isFinished = false
 
-    public init(handle: FileHandle) {
-        handle.readabilityHandler = { [weak self] readable in
-            guard let self else { return }
-            let data = readable.availableData
-            guard !data.isEmpty else {
-                self.finish()
-                return
-            }
-            self.consume(data)
-        }
-    }
-
-    private func consume(_ data: Data) {
+    func consume(_ data: Data) {
         lock.lock()
         buffer.append(data)
         var parsedLines: [Data] = []
@@ -183,30 +171,21 @@ private final class StderrDrain: @unchecked Sendable {
         pending.forEach { $0.resume(returning: message) }
     }
 
-    public init(handle: FileHandle) {
-        handle.readabilityHandler = { [weak self] readable in
-            guard let self else { return }
-            let data = readable.availableData
-            guard !data.isEmpty else {
-                readable.readabilityHandler = nil
-                self.finish()
-                return
-            }
-            self.lock.lock()
-            self.tail.append(data)
-            if self.tail.count > self.maximumBytes {
-                self.tail.removeFirst(self.tail.count - self.maximumBytes)
-            }
-            self.lock.unlock()
+    func consume(_ data: Data) {
+        lock.lock()
+        tail.append(data)
+        if tail.count > maximumBytes {
+            tail.removeFirst(tail.count - maximumBytes)
         }
+        lock.unlock()
     }
 }
 
 private actor JSONRPCSession {
     private let process: Process
     private let input: FileHandle
-    private let output: FileHandle
-    private let errorOutput: FileHandle
+    private let outputReader: PipeReader
+    private let errorReader: PipeReader
     private let pump: LinePump
     private let stderrDrain: StderrDrain
     private let decoder = JSONDecoder()
@@ -227,18 +206,23 @@ private actor JSONRPCSession {
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
-        let pump = LinePump(handle: outputPipe.fileHandleForReading)
-        let stderrDrain = StderrDrain(handle: errorPipe.fileHandleForReading)
+        let pump = LinePump()
+        let stderrDrain = StderrDrain()
         self.process = process
         input = inputPipe.fileHandleForWriting
-        output = outputPipe.fileHandleForReading
-        errorOutput = errorPipe.fileHandleForReading
         self.pump = pump
         self.stderrDrain = stderrDrain
 
         do {
             try process.run()
+            outputReader = try PipeReader(handle: outputPipe.fileHandleForReading) { data in
+                if let data { pump.consume(data) } else { pump.finish() }
+            }
+            errorReader = try PipeReader(handle: errorPipe.fileHandleForReading) { data in
+                if let data { stderrDrain.consume(data) } else { stderrDrain.finish() }
+            }
         } catch {
+            if process.isRunning { process.terminate() }
             throw CodexClientError.processLaunchFailed(error.localizedDescription)
         }
     }
@@ -280,12 +264,12 @@ private actor JSONRPCSession {
     }
 
     public func stop() {
-        output.readabilityHandler = nil
-        errorOutput.readabilityHandler = nil
-        try? input.close()
         if process.isRunning {
             process.terminate()
         }
+        outputReader.stop()
+        errorReader.stop()
+        try? input.close()
         pump.finish()
         stderrDrain.finish()
     }
@@ -340,11 +324,7 @@ private actor JSONRPCSession {
 
     private func triggerTimeout() {
         didTimeout = true
-        output.readabilityHandler = nil
-        errorOutput.readabilityHandler = nil
-        if process.isRunning { process.terminate() }
-        pump.finish()
-        stderrDrain.finish()
+        stop()
     }
 
     private func send(_ object: [String: Any]) throws {

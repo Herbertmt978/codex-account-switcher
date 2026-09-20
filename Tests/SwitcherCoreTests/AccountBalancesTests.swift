@@ -60,6 +60,15 @@ struct AccountBalancesTests {
         #expect(unlimited.lines(language: .english).first == "Credits: Unlimited")
     }
 
+    @Test func creditBalancesDisplayWholeCreditsWithoutChangingTheStoredBalance() {
+        for (raw, display) in [("288.441425000", "288"), ("125.99", "125"), ("0.75", "0"), ("1234.50", "1,234")] {
+            let balance = AccountBalances(credits: .init(hasCredits: true, unlimited: false, balance: raw),
+                availableResets: nil, resetCredits: nil)
+            #expect(balance.lines(language: .english).first == "Credits: \(display)")
+            #expect(balance.credits?.balance == raw)
+        }
+    }
+
     @Test func balanceOnlyCacheRoundTripsAndOldCachesStillDecode() throws {
         let id = UUID()
         let balance = try parse(#"{"rateLimitResetCredits":{"availableCount":2,"credits":null}}"#)

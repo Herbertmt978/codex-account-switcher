@@ -6,6 +6,20 @@ private let fixtureExecutable = ProcessInfo.processInfo.environment["SWITCHER_TE
 
 @Suite(.enabled(if: fixtureExecutable != nil))
 struct CodexClientTransportTests {
+    @Test func concurrentAccountReadsCompleteIndependently() async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<32 {
+                group.addTask {
+                    let home = try fixtureHome("normal")
+                    defer { try? FileManager.default.removeItem(at: home) }
+                    let usage = try await makeClient().readAccountUsage(profileHome: home)
+                    #expect(usage.weekly?.remainingPercent == 42)
+                }
+            }
+            try await group.waitForAll()
+        }
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SWITCHER_TEST_INSTALLED_CLI"] != nil))
     func installedCliUsesOnlyAnIsolatedEmptyHome() async throws {
         let home = try fixtureHome("installed-cli")
@@ -85,6 +99,18 @@ struct CodexClientTransportTests {
             _ = try await client.readIdentity(profileHome: home)
             Issue.record("Expected a timeout")
         } catch { #expect(error as? CodexClientError == .timeout) }
+    }
+
+    @Test func stderrIsDrainedBeforeReportingAnExitedServer() async throws {
+        let home = try fixtureHome("stderr-failure")
+        defer { try? FileManager.default.removeItem(at: home) }
+        do {
+            _ = try await makeClient().readIdentity(profileHome: home)
+            Issue.record("Expected the server failure")
+        } catch CodexClientError.connectionClosedWithDetails(let message) {
+            #expect(message.hasSuffix("fixture startup failure"))
+            #expect(message.utf8.count <= 4_096)
+        }
     }
 
     @Test func pendingLoginCanBeCancelled() async throws {

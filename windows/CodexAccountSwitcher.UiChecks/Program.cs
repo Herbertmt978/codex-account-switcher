@@ -95,6 +95,10 @@ internal static class Program
             client.State = client.State with { Settings = client.State.Settings with { ShowsFiveHourUsage = true } };
             window.Navigate("accounts"); Render(window, Path.Combine(output, "accounts-five-hour-zh.png"));
             Assert(All<TextBlock>(window).Count(text => text.Text == "5 小时") == 2, "Five-hour view must be per account.");
+            var tracks = All<Grid>(window).Where(grid => System.Windows.Automation.AutomationProperties.GetName(grid).EndsWith("%"))
+                .Select(grid => grid.ActualWidth).ToArray();
+            Assert(tracks.Length == 4 && tracks.Max() - tracks.Min() < 1,
+                "All usage tracks must have the same width across account rows and allowance windows.");
             client.State = client.State with { Settings = client.State.Settings with { Language = "english" } };
             foreach (var pair in new Dictionary<string, string> {
                 ["accounts"] = "Accounts", ["manage"] = "Manage Accounts", ["settings"] = "Settings", ["five_hour"] = "5h", ["weekly"] = "7d",
@@ -105,7 +109,7 @@ internal static class Program
             }) client.State.Strings[pair.Key] = pair.Value;
             client.State = client.State with { Accounts = [
                 client.State.Accounts[0] with { Profile = client.State.Accounts[0].Profile with { DisplayName = "Person", Email = "person@example.test" },
-                    ContextLabel = "Personal", BalanceLines = ["Credits: 125.50", "Available resets: 2", "Next reset expiry: 27 Sept 2026, 14:00"] },
+                    ContextLabel = "Personal", BalanceLines = ["Credits: 125", "Available resets: 2", "Next reset expiry: 27 Sept 2026, 14:00"] },
                 client.State.Accounts[1] with { Profile = client.State.Accounts[1].Profile with { DisplayName = "Person", Email = "person@example.test" },
                     ContextLabel = "Workspace", Usage = null, BalanceLines = ["Credits: 250", "Available resets: 0"] }
             ] };
@@ -115,6 +119,10 @@ internal static class Program
             Assert(All<TextBlock>(window).Any(text => text.Text == "Credits: 250"), "A workspace without weekly limits must still show credits.");
             var nextExpiry = All<TextBlock>(window).Single(text => text.Text.StartsWith("Next reset expiry:"));
             Assert(nextExpiry.ActualHeight < nextExpiry.FontSize * 2, "The next reset expiry must fit on one line at the default width.");
+            var fiveHourTrack = All<Grid>(window).Single(grid => System.Windows.Automation.AutomationProperties.GetName(grid) == "5h 91%");
+            var weeklyTrack = All<Grid>(window).Single(grid => System.Windows.Automation.AutomationProperties.GetName(grid) == "7d 83%");
+            Assert(Math.Abs(fiveHourTrack.ActualWidth - weeklyTrack.ActualWidth) < 1,
+                "Five-hour and weekly usage must use equally wide tracks despite different reset text lengths.");
             var workspace = All<Button>(window).Single(button => System.Windows.Automation.AutomationProperties.GetName(button) == "Person — Workspace");
             workspace.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Render(window, Path.Combine(output, "workspace-confirmation.png"));

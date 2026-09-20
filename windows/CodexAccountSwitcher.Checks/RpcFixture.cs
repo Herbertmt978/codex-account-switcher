@@ -7,6 +7,11 @@ internal static class RpcFixture
     {
         var home = Environment.GetEnvironmentVariable("CODEX_HOME") ?? throw new Exception("Missing fixture home");
         var scenario = await File.ReadAllTextAsync(Path.Combine(home, "fixture-mode"));
+        if (scenario == "stderr-failure") {
+            await Console.Error.WriteAsync(new string('x', 20_000) + "fixture startup failure");
+            await Console.Error.FlushAsync();
+            return;
+        }
         while (await Console.In.ReadLineAsync() is { } line) {
             using var document = JsonDocument.Parse(line); var message = document.RootElement;
             if (!message.TryGetProperty("id", out var id)) continue;

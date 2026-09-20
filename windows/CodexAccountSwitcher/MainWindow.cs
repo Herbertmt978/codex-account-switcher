@@ -130,6 +130,7 @@ public sealed class MainWindow : Window
             warning.Children.Add(Button(T("manage"), () => Navigate("manage"), left: true)); body.Children.Add(warning);
         }
         var list = new StackPanel();
+        Grid.SetIsSharedSizeScope(list, true);
         foreach (var row in State.Accounts) {
             var avatar = new Border { Width = 32, Height = 32, CornerRadius = new CornerRadius(4), Background = B("Hover"),
                 Child = Text(row.Initials, 11, bold: true) };
@@ -197,7 +198,9 @@ public sealed class MainWindow : Window
     private Grid UsageLine(string title, int percent, string? reset)
     {
         var grid = new Grid { Margin = new Thickness(0, 5, 0, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto }); grid.ColumnDefinitions.Add(new ColumnDefinition()); grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "UsageLabel" });
+        grid.ColumnDefinitions.Add(new ColumnDefinition());
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "UsageDetails" });
         grid.Children.Add(Text(title, 10.5, muted: true));
         var track = new Grid { Height = 4, Margin = new Thickness(7, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center };
         track.Children.Add(new Border { Background = B("Line"), CornerRadius = new CornerRadius(1) });

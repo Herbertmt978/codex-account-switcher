@@ -48,9 +48,20 @@ public struct AccountBalances: Codable, Equatable, Sendable {
     /// Shared presentation for both native clients; opaque credit IDs are deliberately omitted.
     public func lines(language: AppLanguage) -> [String] {
         func text(_ key: String) -> String { L10n.string(key, language: language) }
-        let balance = credits.map { $0.unlimited ? text("unlimited_credits")
-            : ($0.balance ?? ($0.hasCredits ? text("balance_unavailable") : "0")) }
-            ?? text("balance_unavailable")
+        let balance: String
+        if let credits {
+            if credits.unlimited { balance = text("unlimited_credits") }
+            else if let raw = credits.balance,
+                    let amount = Decimal(string: raw, locale: Locale(identifier: "en_US_POSIX")) {
+                let formatter = NumberFormatter()
+                formatter.locale = language == .simplifiedChinese ? Locale(identifier: "zh_CN")
+                    : (language == .english ? Locale(identifier: "en_GB") : .current)
+                formatter.numberStyle = .decimal
+                formatter.maximumFractionDigits = 0
+                formatter.roundingMode = .down
+                balance = formatter.string(from: NSDecimalNumber(decimal: amount)) ?? text("balance_unavailable")
+            } else { balance = credits.hasCredits ? text("balance_unavailable") : "0" }
+        } else { balance = text("balance_unavailable") }
         var result = ["\(text("credits_balance")): \(balance)",
                       "\(text("available_resets")): \(availableResets.map(String.init) ?? text("balance_unavailable"))"]
         guard let availableResets, availableResets > 0 else { return result }

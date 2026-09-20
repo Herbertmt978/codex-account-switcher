@@ -156,7 +156,7 @@ struct AccountRow: View {
                 .font(.system(size: 9.5).monospacedDigit())
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+                .frame(width: 120, alignment: .leading)
         }
     }
 

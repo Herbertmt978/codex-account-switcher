@@ -12,7 +12,7 @@ Existing profiles recover missing identity and plan metadata from their own save
 
 Each profile refreshes its own `account/rateLimits/read` response. The account row shows:
 
-- remaining usage credits, or Unlimited when explicitly reported;
+- remaining usage credits as whole numbers (rounded down for display), or Unlimited when explicitly reported;
 - the number of available usage-limit resets;
 - only the next expiry date among available reset credits, or an explicit message when none expire;
 - the existing weekly allowance and optional five-hour allowance with their scheduled reset times.
@@ -23,10 +23,14 @@ This is read-only tracking. It does not redeem a reset, buy credits, infer entit
 
 Balances are cached per saved profile, alongside usage. Cached values are labelled until a fresh read succeeds, and remain labelled if refresh fails. Removing an inactive profile also removes its cache entry.
 
+Newly signed-in or registered profiles refresh automatically, including when an earlier refresh is still running. Five-hour and weekly bars share the same track width; only their fill represents the remaining percentage. Raw credit balances retain their original precision in the cache.
+
 Older Codex runtimes may omit reset-credit metadata. The UI reports it as unavailable; use an up-to-date Codex runtime to obtain the detailed response. No separate account API or browser cookie integration is used.
 
 ## Verification
 
-Synthetic tests cover separate same-email contexts, duplicate rejection, switching in both directions, restoration after a wrong-workspace response, legacy identity hydration, independent balance caches, credit-only accounts, unknown versus zero balances, partial expiry details and omission of redeemed credits. Native Windows checks exercise same-email account rows and confirmations.
+Synthetic tests cover separate same-email contexts, duplicate rejection, switching in both directions, restoration after a wrong-workspace response, legacy identity hydration, independent balance caches, credit-only accounts, whole-number presentation, partial expiry details and omission of redeemed credits. Native Windows checks exercise same-email account rows, confirmations and equal-width progress tracks.
+
+Windows reads Codex output on cancellable native pipe readers. Transport tests cover 32 simultaneous account reads, a silent server, sign-in cancellation, stderr drainage, and stopping an idle reader while its writer remains open.
 
 Real browser account selection and a complete Codex Desktop restart require interactive acceptance after active tasks have finished. Windows tests do not establish macOS runtime behaviour.

@@ -249,6 +249,8 @@ open class AccountController {
             )
             try await store.addProfile(profile)
             apply(try await store.loadRegistry())
+            await waitForWeeklyUsageRefresh()
+            refreshWeeklyUsage()
         } catch {
             let loginError = error
             do {
@@ -273,6 +275,8 @@ open class AccountController {
             apply(try await store.loadRegistry())
             activeIdentityConfirmed = true
             visibleError = nil
+            await waitForWeeklyUsageRefresh()
+            refreshWeeklyUsage()
         } catch { showError(error) }
     }
 
