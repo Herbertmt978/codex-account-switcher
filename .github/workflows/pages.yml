@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: github.repository == 'liuzhao1225/codex-account-switcher' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository

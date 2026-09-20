@@ -1,9 +1,12 @@
-- 修复 macOS 使用 fish 作为登录 shell 时，账号操作报“Could not read the login shell's Codex path”的问题（#10）。
-- 保留登录 shell 的 PATH 与 CODEX_CLI_PATH 设置，覆盖 sh、bash、zsh、fish 的真实登录 shell 回归测试。
-- Windows 使用相同版本号重新构建，运行时查找行为保持不变。
+This fork adds separate Personal and Workspace profiles for accounts that share an email address.
 
-- Fix macOS account actions failing with fish as the login shell (#10).
-- Preserve login-shell PATH and CODEX_CLI_PATH settings, with regression coverage for sh, bash, zsh, and fish.
-- Rebuild Windows at the same version with unchanged runtime discovery behavior.
+- Read each profile's usage, credit balance and current available reset count independently.
+- Show whole credit numbers, equal-width usage tracks and only the next reset-credit expiry in a wider window.
+- Refresh new profiles immediately and prevent concurrent Windows account reads from stalling.
+- Keep update links within this fork. Mac updates are downloaded and installed manually.
 
-**下载 / Downloads:** 在 Assets 中选择 macOS `.dmg` 或 Windows `.exe`。SHA-256 校验文件同时提供。
+Download the Windows x64 EXE or the macOS 14+ Apple Silicon DMG from Assets. Both include SHA-256 checksum files. Quit the existing switcher from its tray/menu-bar menu before replacing it; saved profiles remain in their existing data directory.
+
+**Mac installation:** open the DMG and drag the app to Applications. This build is ad-hoc signed, not signed with an Apple Developer ID or notarised by Apple. If first launch is blocked, follow [Apple's instructions](https://support.apple.com/en-gb/102445) to use System Settings → Privacy & Security → Open Anyway for this app. Managed Macs may prohibit this. Intel Macs are not included in this release.
+
+Windows is also unsigned. Neither version redeems resets or records resets used. This is an independent fork of [liuzhao1225/codex-account-switcher](https://github.com/liuzhao1225/codex-account-switcher), with the original MIT licence and attribution preserved.

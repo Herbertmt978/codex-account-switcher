@@ -10,7 +10,8 @@ final class AppUpdater: NSObject, ObservableObject, SPUUpdaterDelegate, @preconc
     @Published private(set) var canCheckForUpdates = false
     @Published private(set) var isInstalling = false
     @Published private(set) var lastError: String?
-    var automaticallyChecks: Bool { controller?.updater.automaticallyChecksForUpdates ?? true }
+    var supportsAutomaticChecks: Bool { releasePage == nil }
+    var automaticallyChecks: Bool { supportsAutomaticChecks && (controller?.updater.automaticallyChecksForUpdates ?? true) }
 
     var accountOperationInProgress = false {
         didSet {
@@ -24,12 +25,25 @@ final class AppUpdater: NSObject, ObservableObject, SPUUpdaterDelegate, @preconc
     private var controller: SPUStandardUpdaterController?
     private var observations: [NSKeyValueObservation] = []
     private var pendingRelaunch: (() -> Void)?
+    private let releasePage: URL?
+    private let openReleasePage: (URL) -> Void
+
+    init(releasePage: URL? = (Bundle.main.object(forInfoDictionaryKey: "SwitcherReleasePage") as? String).flatMap(URL.init(string:)),
+         openReleasePage: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
+        self.releasePage = releasePage
+        self.openReleasePage = openReleasePage
+        super.init()
+    }
 
     var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Development"
     }
 
     func start() {
+        if releasePage != nil {
+            canCheckForUpdates = true
+            return
+        }
         guard controller == nil else { return }
         let controller = SPUStandardUpdaterController(
             startingUpdater: false, updaterDelegate: self, userDriverDelegate: self
@@ -51,11 +65,16 @@ final class AppUpdater: NSObject, ObservableObject, SPUUpdaterDelegate, @preconc
     func checkForUpdates() {
         guard !accountOperationInProgress, !isInstalling else { return }
         lastError = nil
+        if let releasePage {
+            openReleasePage(releasePage)
+            return
+        }
         // Sparkle also brings back a pending gentle reminder through this action.
         controller?.checkForUpdates(nil)
     }
 
     func setAutomaticallyChecks(_ enabled: Bool) {
+        guard supportsAutomaticChecks else { return }
         objectWillChange.send()
         controller?.updater.automaticallyChecksForUpdates = enabled
     }

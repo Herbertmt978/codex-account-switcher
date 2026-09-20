@@ -13,7 +13,7 @@ public sealed class NativeSettings
 {
     private const string Key = @"Software\CodexAccountSwitcher";
     private const string Run = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    public string Version => typeof(NativeSettings).Assembly.GetName().Version?.ToString(3) ?? "0.1.13";
+    public string Version => typeof(NativeSettings).Assembly.GetName().Version?.ToString(3) ?? "0.1.14";
     public bool LaunchAtLogin {
         get { using var key = Registry.CurrentUser.OpenSubKey(Run); return key?.GetValue("CodexAccountSwitcher") is string; }
         set { using var key = Registry.CurrentUser.CreateSubKey(Run);
@@ -38,13 +38,13 @@ public sealed class NativeSettings
             Version? latest = null;
             for (var page = 1; ; page++) {
                 using var document = JsonDocument.Parse(await http.GetStringAsync(
-                    "https://api.github.com/repos/liuzhao1225/codex-account-switcher/releases?per_page=100&page=" + page));
+                    "https://api.github.com/repos/Herbertmt978/codex-account-switcher/releases?per_page=100&page=" + page));
                 var candidate = LatestWindowsVersion(document.RootElement);
                 if (candidate != null && (latest == null || candidate > latest)) latest = candidate;
                 if (document.RootElement.GetArrayLength() < 100) break;
             }
             UpdatePage = latest != null && latest > new Version(Version)
-                ? new Uri("https://github.com/liuzhao1225/codex-account-switcher/releases/tag/v" + latest.ToString(3)) : null;
+                ? new Uri("https://github.com/Herbertmt978/codex-account-switcher/releases/tag/v" + latest.ToString(3)) : null;
         } catch (Exception) { UpdateError = "update_check_failed"; }
         finally { IsChecking = false; Changed?.Invoke(); }
     }

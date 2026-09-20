@@ -1,31 +1,27 @@
-# Unified versions and releases
+# Fork versions and releases
 
-macOS and Windows share one product version, one immutable `v<major>.<minor>.<patch>` tag, and one GitHub Release. Every new release contains both platform packages built from the same tagged commit. The release title equals the tag, so the version is visible directly in the release list.
+This fork shares one version and immutable `v<major>.<minor>.<patch>` tag across Windows x64 and macOS 14+ Apple Silicon. Both packages are built from that tag and published together as the latest release on Herbertmt978/codex-account-switcher.
 
 ## Test and publish
 
-1. Push changes and run platform CI on GitHub: shared Swift tests on both systems, macOS CoreChecks, Windows transport/WPF checks and self-contained EXE checks. Interface or account-switch changes also need appropriate real-system validation.
-2. Set the same version in `CITATION.cff`, `scripts/package-local-app.sh`, `Sources/SwitcherCore/CodexClient.swift`, and `windows/Directory.Build.props`. Keep the host/client fallback versions in sync. Write only this release's changes in `.github/release-notes.md`.
-3. After CI succeeds, create and push an annotated `v*` tag from the intended main commit. Ordinary main pushes run CI without publishing.
-4. `.github/workflows/release.yml` validates all version sources and the tagged commit, then runs macOS and Windows builds in parallel. Windows uses the reusable `.github/workflows/windows.yml`; it never publishes independently.
-5. macOS tests, signs, notarizes, staples and checks the DMG. Windows tests, packages and runs the EXE without SDK/runtime paths. The publish job waits for both jobs, verifies both SHA-256 files and the macOS feed, uploads everything to a draft, then publishes it as Latest.
-6. Verify the public assets and the Pages update feed before announcing completion. A failed build prevents publication. Fix source errors with a new commit/tag; infrastructure failures can rerun the same immutable tag. An existing release is never silently replaced. Inspect and remove an incomplete draft before retrying its publishing step.
+1. Set matching versions in CITATION.cff, the Mac packaging script, CodexClient, the host fallback and Windows metadata. Update the release notes and download instructions.
+2. Complete local Windows/core/UI/package checks. PR CI also runs macOS tests, CoreChecks, DMG signature/metadata checks and an isolated Codex-home app launch.
+3. Merge only after all checks pass. Create an annotated version tag on the verified main commit.
+4. The Fork release workflow validates version sources and main ancestry, refuses existing releases, and reruns both platform checks and packaging.
+5. Publication waits for both builds, verifies the DMG and EXE against their checksum files, creates a draft, then publishes it as Latest. Verify the public assets after publication. Do not overwrite a published version.
 
-```sh
-git tag -a v0.1.12 -m 'v0.1.12' origin/main
-git push origin v0.1.12
-```
+The original Developer ID/notarisation workflow is restricted to the upstream repository. This fork's Mac app uses an ad-hoc signature; it does not borrow the upstream author's identity, signing keys or update feed. The upstream website deployment is also restricted to the upstream repository.
 
-## Assets and updates
+## Mac installation
 
-Each release includes:
+Download the DMG from this fork's release, open it and drag Codex Account Switcher to Applications. Quit an existing switcher before replacing it. Account data stays in the existing application-support directory.
 
-- `Codex-Account-Switcher-macos-arm64.dmg` and `.sha256`
-- `Codex-Account-Switcher-windows-x64.exe` and `.sha256`
-- The signed macOS `appcast.xml`
+The app is ad-hoc signed and is not notarised by Apple. If macOS blocks first launch, use the per-app **Open Anyway** option under **System Settings → Privacy & Security**, following [Apple's instructions](https://support.apple.com/en-gb/102445). An organisation-managed Mac may prevent this. Do not disable Gatekeeper globally. If macOS reports malware or a damaged app, stop and check the download and checksum instead of overriding that warning.
 
-Both website download buttons use `/releases/latest/download/<asset>`. macOS uses the dedicated Pages feed; legacy Mac installations using `/releases/latest/download/appcast.xml` continue to work because every unified release includes that file. Pages refreshes after a successful unified release and preserves the signed feed contents.
+The DMG targets Apple Silicon (arm64), not Intel Macs. CI verifies the app's launch and package integrity; it cannot confirm the interactive Gatekeeper approval on every Mac. A normal Developer ID-signed and notarised release requires the fork owner's Apple Developer credentials.
 
-Windows 0.1.12 and later select stable `v*` releases containing a Windows EXE. The initial Windows 0.1.11 preview only recognized `windows-v*`; it needs one manual upgrade to enter the unified channel. Windows opens the update download page and does not replace its running EXE automatically. The EXE remains unsigned.
+## Updates and assets
 
-The previous separate macOS/Windows release entries may be removed after verifying the unified replacement. Preserve their Git tags and commits. Old version-specific asset links stop working when their release entries are removed; current documentation and download buttons must point to the unified release.
+Each release contains the Mac DMG, Windows EXE and one SHA-256 file per package. Windows checks this fork's releases and opens its download page. On Mac, Check for Updates opens this fork's latest release page; automatic checks/installations are unavailable for this distribution. No Sparkle appcast is published or consumed by fork Mac packages.
+
+Both platforms use manual replacement. Closing the Windows title-bar window only hides it; choose Quit from the tray before replacing the executable. Saved profiles and active Codex credentials remain separate from the application package.

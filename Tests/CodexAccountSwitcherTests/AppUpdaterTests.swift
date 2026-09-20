@@ -6,6 +6,24 @@ import Testing
 
 @MainActor
 struct AppUpdaterTests {
+    @Test func forkUpdatesOpenTheirOwnReleasePageWithoutStartingSparkle() {
+        let page = URL(string: "https://github.com/Herbertmt978/codex-account-switcher/releases/latest")!
+        var opened: [URL] = []
+        let adapter = AppUpdater(releasePage: page, openReleasePage: { opened.append($0) })
+        adapter.start()
+        #expect(adapter.canCheckForUpdates)
+        #expect(!adapter.supportsAutomaticChecks)
+        adapter.setAutomaticallyChecks(true)
+        #expect(!adapter.automaticallyChecks)
+        adapter.accountOperationInProgress = true
+        adapter.checkForUpdates()
+        #expect(opened.isEmpty)
+        adapter.accountOperationInProgress = false
+        adapter.checkForUpdates()
+        #expect(opened == [page])
+        #expect(!adapter.isInstalling)
+    }
+
     @Test func successfulBackgroundCheckClearsPreviousNetworkError() throws {
         let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

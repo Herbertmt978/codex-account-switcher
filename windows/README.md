@@ -59,6 +59,6 @@ The EXE's `--self-test` mode validates its bundled host against an isolated temp
 
 Windows versions come from `windows/Directory.Build.props` and must match the macOS version sources. A single `v<major>.<minor>.<patch>` tag tests and builds both platforms, then publishes their packages together. See [release management](../docs/platform-releases.md). Windows 0.1.11 preview requires one manual upgrade to enter the unified update channel.
 
-Each release rebuilds and tests both platforms from the same tag, then publishes one Latest release containing the DMG, EXE, and checksums. The MVP does not reuse previous packages or build caches across runs. Local packaging alone does not publish a release.
+Each fork release rebuilds and tests both platforms from the same tag, then publishes one Latest release containing the ad-hoc-signed Mac DMG, Windows EXE and checksums. Local packaging alone does not publish a release. Windows update checks use Herbertmt978/codex-account-switcher.
 
 Icon resources can be regenerated from the existing artwork with `python scripts/generate-windows-icons.py` (Pillow required). Application artwork and transparent tray artwork are packaged separately.
