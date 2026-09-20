@@ -6,6 +6,20 @@ private let fixtureExecutable = ProcessInfo.processInfo.environment["SWITCHER_TE
 
 @Suite(.enabled(if: fixtureExecutable != nil))
 struct CodexClientTransportTests {
+    @Test func concurrentAccountReadsCompleteIndependently() async throws {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for _ in 0..<32 {
+                group.addTask {
+                    let home = try fixtureHome("normal")
+                    defer { try? FileManager.default.removeItem(at: home) }
+                    let usage = try await makeClient().readAccountUsage(profileHome: home)
+                    #expect(usage.weekly?.remainingPercent == 42)
+                }
+            }
+            try await group.waitForAll()
+        }
+    }
+
     @Test(.enabled(if: ProcessInfo.processInfo.environment["SWITCHER_TEST_INSTALLED_CLI"] != nil))
     func installedCliUsesOnlyAnIsolatedEmptyHome() async throws {
         let home = try fixtureHome("installed-cli")
@@ -37,6 +51,46 @@ struct CodexClientTransportTests {
         #expect(identity.email == "fixture@example.test")
     }
 
+    @Test func realAccountReadShapeUsesCredentialWorkspaceIdentity() async throws {
+        let home = try fixtureHome("metadata")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try credential("workspace", plan: "business").write(to: home.appending(path: "auth.json"))
+        let identity = try await makeClient().readIdentity(profileHome: home)
+        #expect(identity.accountID == "workspace")
+        #expect(identity.email == "person@example.test")
+        #expect(identity.planType == "business")
+    }
+
+    @Test func creditsRemainAvailableWithoutAWeeklyWindow() async throws {
+        let home = try fixtureHome("credits-only")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try credential("workspace").write(to: home.appending(path: "auth.json"))
+        let usage = try await makeClient().readAccountUsage(profileHome: home)
+        #expect(usage.weekly == nil)
+        #expect(usage.balances?.credits?.balance == "250")
+        #expect(usage.balances?.availableResets == 2)
+        #expect(usage.balances?.resetCredits?.count == 1)
+    }
+
+    @Test func usageFromAnotherWorkspaceIsRejected() async throws {
+        let home = try fixtureHome("usage-mismatch")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try credential("workspace").write(to: home.appending(path: "auth.json"))
+        await #expect(throws: CodexClientError.identityUnavailable) {
+            _ = try await makeClient().readAccountUsage(profileHome: home)
+        }
+    }
+
+    @Test func missingUsageAndBalancesAreRejectedInsteadOfReplacingCachedValues() async throws {
+        for scenario in ["usage-account-response", "usage-empty", "usage-null"] {
+            let home = try fixtureHome(scenario)
+            defer { try? FileManager.default.removeItem(at: home) }
+            await #expect(throws: CodexClientError.weeklyUsageUnavailable) {
+                _ = try await makeClient().readAccountUsage(profileHome: home)
+            }
+        }
+    }
+
     @Test func aSilentServerTimesOut() async throws {
         let home = try fixtureHome("timeout")
         defer { try? FileManager.default.removeItem(at: home) }
@@ -45,6 +99,18 @@ struct CodexClientTransportTests {
             _ = try await client.readIdentity(profileHome: home)
             Issue.record("Expected a timeout")
         } catch { #expect(error as? CodexClientError == .timeout) }
+    }
+
+    @Test func stderrIsDrainedBeforeReportingAnExitedServer() async throws {
+        let home = try fixtureHome("stderr-failure")
+        defer { try? FileManager.default.removeItem(at: home) }
+        do {
+            _ = try await makeClient().readIdentity(profileHome: home)
+            Issue.record("Expected the server failure")
+        } catch CodexClientError.connectionClosedWithDetails(let message) {
+            #expect(message.hasSuffix("fixture startup failure"))
+            #expect(message.utf8.count <= 4_096)
+        }
     }
 
     @Test func pendingLoginCanBeCancelled() async throws {

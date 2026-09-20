@@ -68,9 +68,9 @@ struct SettingsView: View {
                 settingSwitch("automatically_check_updates", isOn: Binding(
                     get: { updater.automaticallyChecks },
                     set: { updater.setAutomaticallyChecks($0) }
-                ))
+                )).disabled(!updater.supportsAutomaticChecks)
             }
-            Text(model.text("update_check_hint"))
+            Text(model.text(updater.supportsAutomaticChecks ? "update_check_hint" : "manual_update_hint"))
                 .foregroundStyle(.secondary)
                 .modifier(SettingsDetail())
             rowDivider

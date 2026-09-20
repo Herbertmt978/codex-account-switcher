@@ -59,3 +59,9 @@ jobs:
 
       - name: Run core checks
         run: ./scripts/run-core-checks.sh
+
+      - name: Verify the fork macOS package and app launch
+        if: github.repository == 'Herbertmt978/codex-account-switcher'
+        run: |
+          export RELEASE_VERSION=$(node -e "console.log(require('fs').readFileSync('CITATION.cff','utf8').match(/^version:\\s*(\\S+)/m)[1])")
+          bash scripts/package-fork-macos.sh

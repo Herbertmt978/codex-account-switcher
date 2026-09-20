@@ -6,13 +6,28 @@ public struct AccountProfile: Codable, Identifiable, Equatable, Hashable, Sendab
     public let id: UUID
     public var displayName: String
     public let email: String?
-    public let accountID: String?
+    public var accountID: String?
+    public var planType: String?
     public let createdAt: Date
     public var lastUsedAt: Date?
 
-    public init(id: UUID, displayName: String, email: String?, accountID: String?, createdAt: Date, lastUsedAt: Date? = nil) {
+    public init(id: UUID, displayName: String, email: String?, accountID: String?, createdAt: Date, lastUsedAt: Date? = nil, planType: String? = nil) {
         self.id = id; self.displayName = displayName; self.email = email
         self.accountID = accountID; self.createdAt = createdAt; self.lastUsedAt = lastUsedAt
+        self.planType = planType
+    }
+
+    public func contextLabel(language: AppLanguage) -> String {
+        guard let planType else { return L10n.string("account_context_unknown", language: language) }
+        let key: String
+        switch planType {
+        case "free", "go", "plus", "pro", "prolite": key = "personal_account"
+        case "team", "business", "self_serve_business_prolite", "self_serve_business_usage_based",
+             "ent26", "enterprise", "enterprise_cbp_automation", "enterprise_cbp_usage_based",
+             "edu", "edu_plus", "edu_pro": key = "workspace_account"
+        default: key = "account_context_unknown"
+        }
+        return L10n.string(key, language: language)
     }
 
     public var initials: String {
@@ -99,11 +114,13 @@ public struct WeeklyUsage: Codable, Equatable, Sendable {
 
 public struct UsageCacheEntry: Codable, Equatable, Sendable {
     public let profileID: UUID
-    public let usage: WeeklyUsage
+    public let usage: WeeklyUsage?
+    public let balances: AccountBalances?
     public let fetchedAt: Date
 
-    public init(profileID: UUID, usage: WeeklyUsage, fetchedAt: Date) {
+    public init(profileID: UUID, usage: WeeklyUsage?, fetchedAt: Date, balances: AccountBalances? = nil) {
         self.profileID = profileID; self.usage = usage; self.fetchedAt = fetchedAt
+        self.balances = balances
     }
 }
 
@@ -139,8 +156,11 @@ public enum UsageViewState: Equatable, Sendable {
 public struct AccountIdentity: Equatable, Sendable {
     public let accountID: String?
     public let email: String?
+    public let planType: String?
 
-    public init(accountID: String?, email: String?) { self.accountID = accountID; self.email = email }
+    public init(accountID: String?, email: String?, planType: String? = nil) {
+        self.accountID = accountID; self.email = email; self.planType = planType
+    }
 
     public var suggestedDisplayName: String {
         guard let email, let localPart = email.split(separator: "@").first else {
@@ -151,8 +171,14 @@ public struct AccountIdentity: Equatable, Sendable {
 
     public func matches(_ profile: AccountProfile) -> Bool {
         if let expected = profile.accountID, let actual = accountID {
-            return expected == actual
+            guard expected == actual else { return false }
+            if let expectedEmail = profile.email, let actualEmail = email {
+                return expectedEmail.caseInsensitiveCompare(actualEmail) == .orderedSame
+            }
+            return true
         }
+        // A workspace-scoped identity must never match a legacy profile by email alone.
+        guard profile.accountID == nil, accountID == nil else { return false }
         if let expected = profile.email, let actual = email {
             return expected.caseInsensitiveCompare(actual) == .orderedSame
         }

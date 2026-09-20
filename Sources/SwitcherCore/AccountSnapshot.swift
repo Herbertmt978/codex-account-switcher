@@ -8,6 +8,8 @@ public struct AccountSnapshot: Encodable, Sendable {
         public let usage: WeeklyUsage?
         public let usageError: String?
         public let usageStatus: String
+        public let contextLabel: String
+        public let balanceLines: [String]
     }
     public let accounts: [Row]
     public let activeAccountID: UUID?
@@ -26,7 +28,9 @@ extension AccountController {
                 AccountSnapshot.Row(profile: account, initials: account.initials,
                     usage: usageStates[account.id]?.displayedUsage,
                     usageError: usageStates[account.id]?.presentationError,
-                    usageStatus: usageStates[account.id]?.presentationStatus ?? "idle")
+                    usageStatus: usageStates[account.id]?.presentationStatus ?? "idle",
+                    contextLabel: account.contextLabel(language: settings.language),
+                    balanceLines: balanceLines(for: account.id))
             },
             activeAccountID: activeAccountID, settings: settings,
             isMutating: isMutating, isAddingAccount: isAddingAccount,

@@ -6,7 +6,8 @@ namespace CodexAccountSwitcher.Core;
 public sealed record Profile(Guid Id, string DisplayName, string? Email);
 public sealed record Usage(int RemainingPercent, DateTimeOffset ResetsAt,
     int? FiveHourRemainingPercent, DateTimeOffset? FiveHourResetsAt);
-public sealed record AccountRow(Profile Profile, string Initials, Usage? Usage, string? UsageError, string UsageStatus = "loaded");
+public sealed record AccountRow(Profile Profile, string Initials, Usage? Usage, string? UsageError,
+    string UsageStatus = "loaded", string? ContextLabel = null, string[]? BalanceLines = null);
 public sealed record Preferences(string Language = "system", bool ShowsMenuBarPercentage = true, bool ShowsFiveHourUsage = false);
 public sealed record AccountSnapshot(AccountRow[] Accounts, Guid? ActiveAccountID, Preferences Settings,
     bool IsMutating, bool IsAddingAccount, bool ActiveIdentityConfirmed, string? Error, Dictionary<string, string> Strings)

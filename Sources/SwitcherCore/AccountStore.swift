@@ -73,7 +73,26 @@ public actor AccountStore: AccountStoring {
             registry = .empty
             return .empty
         }
-        let loaded = try Self.decoder.decode(AccountRegistry.self, from: readChecked(accountsURL))
+        var loaded = try Self.decoder.decode(AccountRegistry.self, from: readChecked(accountsURL))
+        var upgraded = false
+        for index in loaded.accounts.indices {
+            let profile = loaded.accounts[index]
+            guard profile.accountID == nil || profile.planType == nil,
+                  let identity = try? CredentialIdentity.read(from: profileHome(id: profile.id)),
+                  profile.accountID == nil || profile.accountID == identity.accountID
+            else { continue }
+            if let expected = profile.email, let actual = identity.email,
+               expected.caseInsensitiveCompare(actual) != .orderedSame { continue }
+            if profile.accountID == nil, identity.accountID != nil {
+                loaded.accounts[index].accountID = identity.accountID
+                upgraded = true
+            }
+            if profile.planType == nil, identity.planType != nil {
+                loaded.accounts[index].planType = identity.planType
+                upgraded = true
+            }
+        }
+        if upgraded { try writeJSON(loaded, to: accountsURL) }
         registry = loaded
         return loaded
     }
@@ -102,10 +121,14 @@ public actor AccountStore: AccountStoring {
     }
 
     public func cacheWeeklyUsage(_ usage: WeeklyUsage, profileID: UUID, fetchedAt: Date = Date()) throws {
+        try cacheAccountUsage(AccountUsage(weekly: usage), profileID: profileID, fetchedAt: fetchedAt)
+    }
+
+    public func cacheAccountUsage(_ usage: AccountUsage, profileID: UUID, fetchedAt: Date = Date()) throws {
         let registry = try loadRegistry()
         guard registry.accounts.contains(where: { $0.id == profileID }) else { return }
         var cache = try loadUsageCache()
-        let entry = UsageCacheEntry(profileID: profileID, usage: usage, fetchedAt: fetchedAt)
+        let entry = UsageCacheEntry(profileID: profileID, usage: usage.weekly, fetchedAt: fetchedAt, balances: usage.balances)
         if let index = cache.entries.firstIndex(where: { $0.profileID == profileID }) {
             cache.entries[index] = entry
         } else {
@@ -184,7 +207,8 @@ public actor AccountStore: AccountStoring {
             try commitActiveAccountID(profile.id)
         } else {
             try importCurrentProfile(AccountProfile(id: UUID(), displayName: identity.suggestedDisplayName,
-                email: identity.email, accountID: identity.accountID, createdAt: Date(), lastUsedAt: Date()))
+                email: identity.email, accountID: identity.accountID, createdAt: Date(), lastUsedAt: Date(),
+                planType: identity.planType))
         }
     }
 

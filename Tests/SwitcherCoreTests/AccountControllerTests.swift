@@ -77,6 +77,7 @@ struct AccountControllerTests {
         await fixture.model.start()
         let id = fixture.model.activeAccountID
         await fixture.model.registerCurrentAccount()
+        await fixture.model.waitForWeeklyUsageRefresh()
         #expect(fixture.model.accounts.count == 1)
         #expect(fixture.model.activeAccountID == id)
     }
@@ -95,7 +96,47 @@ struct AccountControllerTests {
         await fixture.model.waitForWeeklyUsageRefresh()
         #expect(fixture.model.usageStates[id]?.displayedUsage?.remainingPercent == 72)
         #expect(fixture.model.usageStates[id]?.refreshError != nil)
-        #expect(try await fixture.store.loadUsageCache().entries.first?.usage.remainingPercent == 72)
+        #expect(try await fixture.store.loadUsageCache().entries.first?.usage?.remainingPercent == 72)
+    }
+
+    @Test func addingAWorkspaceRefreshesItEvenWhenAnotherRefreshIsRunning() async throws {
+        let fixture = try ControllerFixture()
+        defer { fixture.clean() }
+        try fixture.writeActiveCredential()
+        await fixture.model.start()
+        await fixture.client.allowWorkspaceLogin()
+        await fixture.client.blockNextUsageRead()
+        fixture.model.refreshWeeklyUsage()
+        for _ in 0..<100 {
+            if await fixture.client.usageReadIsBlocked { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(await fixture.client.usageReadIsBlocked)
+        fixture.model.addAccount()
+        for _ in 0..<100 {
+            if fixture.model.accounts.count == 2 { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        await fixture.client.unblockUsageRead()
+        for _ in 0..<100 where fixture.model.isAddingAccount {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(!fixture.model.isAddingAccount)
+        let workspace = try #require(fixture.model.accounts.first(where: { $0.accountID == "workspace" }))
+        await fixture.model.waitForWeeklyUsageRefresh()
+        #expect(fixture.model.usageStates[workspace.id]?.displayedUsage?.remainingPercent == 72)
+        #expect(try await fixture.store.loadUsageCache().entries.contains(where: { $0.profileID == workspace.id }))
+    }
+
+    @Test func registeringTheCurrentAccountRefreshesItsUsage() async throws {
+        let fixture = try ControllerFixture()
+        defer { fixture.clean() }
+        await fixture.model.start()
+        try fixture.writeActiveCredential()
+        await fixture.model.registerCurrentAccount()
+        await fixture.model.waitForWeeklyUsageRefresh()
+        let id = try #require(fixture.model.activeAccountID)
+        #expect(fixture.model.usageStates[id]?.displayedUsage?.remainingPercent == 72)
     }
 
     @Test func settingsAreSavedImmediately() async throws {
@@ -158,15 +199,30 @@ private struct ControllerFixture {
 
 private actor FixtureClient: AccountClient {
     private var usageFails = false
+    private var allowsWorkspaceLogin = false
+    private var blocksNextUsage = false
+    private var usageGate: CheckedContinuation<Void, Never>?
+    var usageReadIsBlocked: Bool { usageGate != nil }
+    func allowWorkspaceLogin() { allowsWorkspaceLogin = true }
+    func blockNextUsageRead() { blocksNextUsage = true }
+    func unblockUsageRead() { usageGate?.resume(); usageGate = nil }
     func failUsage() { usageFails = true }
     func readIdentity(profileHome: URL) async throws -> AccountIdentity {
         AccountIdentity(accountID: "demo-account", email: "demo@example.test")
     }
     func readWeeklyUsage(profileHome: URL) async throws -> WeeklyUsage {
+        if blocksNextUsage {
+            blocksNextUsage = false
+            await withCheckedContinuation { usageGate = $0 }
+        }
         if usageFails { throw CodexClientError.connectionClosed }
         return WeeklyUsage(remainingPercent: 72, resetsAt: Date(timeIntervalSince1970: 2_000_000_000))
     }
     func login(profileHome: URL) async throws -> AccountIdentity {
+        if allowsWorkspaceLogin {
+            try Data("workspace-fixture".utf8).write(to: profileHome.appendingPathComponent("auth.json"))
+            return AccountIdentity(accountID: "workspace", email: "demo@example.test", planType: "team")
+        }
         throw CodexClientError.loginFailed("Fixture login is disabled.")
     }
 }

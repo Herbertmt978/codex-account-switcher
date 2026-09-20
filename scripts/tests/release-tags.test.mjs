@@ -34,3 +34,18 @@ test('publication waits for both builds and only the unified workflow publishes'
   assert.match(windows, /workflow_call:/);
   assert.doesNotMatch(windows, /gh release create|tags:/);
 });
+
+test('fork releases wait for both verified packages and remain separate from upstream signing', () => {
+  const fork = fs.readFileSync('.github/workflows/fork-release.yml', 'utf8');
+  const upstream = fs.readFileSync('.github/workflows/release.yml', 'utf8');
+  const packaging = fs.readFileSync('scripts/package-fork-macos.sh', 'utf8');
+  assert.match(fork, /if: github.repository == 'Herbertmt978\/codex-account-switcher'/);
+  assert.match(upstream, /if: github.repository == 'liuzhao1225\/codex-account-switcher'/);
+  assert.match(fork, /needs: \[validate, macos, windows\]/);
+  assert.match(fork, /verify-release-artifacts\.mjs dist "\$GITHUB_REF_NAME" fork/);
+  assert.match(fork, /--draft --verify-tag/);
+  assert.match(fork, /--draft=false --latest/);
+  assert.match(packaging, /codesign --verify --deep --strict "\$mounted_app"/);
+  assert.match(packaging, /SwitcherReleasePage/);
+  assert.match(packaging, /kill -0 "\$app_pid"/);
+});

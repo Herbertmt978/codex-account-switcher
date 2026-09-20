@@ -6,8 +6,9 @@ SCRIPT_DIR=${0:A:h}
 PROJECT_DIR=${SCRIPT_DIR:h}
 RESOURCE_BUNDLE="CodexAccountSwitcher_CodexAccountSwitcher.bundle"
 APP_ICON="$PROJECT_DIR/assets/AppIcon.icns"
-APP_VERSION=${RELEASE_VERSION:-0.1.13}
+APP_VERSION=${RELEASE_VERSION:-0.1.14}
 CODESIGN_IDENTITY=${CODESIGN_IDENTITY:--}
+RELEASE_REPOSITORY=${RELEASE_REPOSITORY:-Herbertmt978/codex-account-switcher}
 
 cd "$PROJECT_DIR"
 BUILD_ARGUMENTS=(-c release)
@@ -47,9 +48,15 @@ cp "$PROJECT_DIR/LICENSE" "$RESOURCES_DIR/LICENSE.txt"
 /usr/bin/plutil -insert LSMinimumSystemVersion -string 14.0 "$CONTENTS_DIR/Info.plist"
 /usr/bin/plutil -insert LSUIElement -bool true "$CONTENTS_DIR/Info.plist"
 /usr/bin/plutil -insert NSHighResolutionCapable -bool true "$CONTENTS_DIR/Info.plist"
-/usr/bin/plutil -insert SUFeedURL -string "https://liuzhao1225.github.io/codex-account-switcher/updates/macos/appcast.xml" "$CONTENTS_DIR/Info.plist"
-/usr/bin/plutil -insert SUPublicEDKey -string "$(cat "$SCRIPT_DIR/sparkle-public-key.txt")" "$CONTENTS_DIR/Info.plist"
-/usr/bin/plutil -insert SUEnableAutomaticChecks -bool true "$CONTENTS_DIR/Info.plist"
+if [[ "$RELEASE_REPOSITORY" == "liuzhao1225/codex-account-switcher" ]]; then
+    /usr/bin/plutil -insert SUFeedURL -string "https://liuzhao1225.github.io/codex-account-switcher/updates/macos/appcast.xml" "$CONTENTS_DIR/Info.plist"
+    /usr/bin/plutil -insert SUPublicEDKey -string "$(cat "$SCRIPT_DIR/sparkle-public-key.txt")" "$CONTENTS_DIR/Info.plist"
+    /usr/bin/plutil -insert SUEnableAutomaticChecks -bool true "$CONTENTS_DIR/Info.plist"
+else
+    /usr/bin/plutil -replace CFBundleIdentifier -string io.github.herbertmt978.codex-account-switcher "$CONTENTS_DIR/Info.plist"
+    /usr/bin/plutil -insert SwitcherReleasePage -string "https://github.com/$RELEASE_REPOSITORY/releases/latest" "$CONTENTS_DIR/Info.plist"
+    /usr/bin/plutil -insert SUEnableAutomaticChecks -bool false "$CONTENTS_DIR/Info.plist"
+fi
 /usr/bin/plutil -insert SUScheduledCheckInterval -integer 3600 "$CONTENTS_DIR/Info.plist"
 /usr/bin/plutil -insert SUAutomaticallyUpdate -bool false "$CONTENTS_DIR/Info.plist"
 /usr/bin/plutil -insert SUAllowsAutomaticUpdates -bool false "$CONTENTS_DIR/Info.plist"

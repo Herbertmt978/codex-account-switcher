@@ -50,6 +50,11 @@ public enum JSONValue: Decodable, Sendable {
         return value
     }
 
+    public var arrayValue: [JSONValue]? {
+        guard case let .array(value) = self else { return nil }
+        return value
+    }
+
     subscript(key: String) -> JSONValue? { objectValue?[key] }
 }
 
@@ -73,19 +78,7 @@ private final class LinePump: @unchecked Sendable {
     private var waiters: [CheckedContinuation<Data?, any Error>] = []
     private var isFinished = false
 
-    public init(handle: FileHandle) {
-        handle.readabilityHandler = { [weak self] readable in
-            guard let self else { return }
-            let data = readable.availableData
-            guard !data.isEmpty else {
-                self.finish()
-                return
-            }
-            self.consume(data)
-        }
-    }
-
-    private func consume(_ data: Data) {
+    func consume(_ data: Data) {
         lock.lock()
         buffer.append(data)
         var parsedLines: [Data] = []
@@ -178,30 +171,21 @@ private final class StderrDrain: @unchecked Sendable {
         pending.forEach { $0.resume(returning: message) }
     }
 
-    public init(handle: FileHandle) {
-        handle.readabilityHandler = { [weak self] readable in
-            guard let self else { return }
-            let data = readable.availableData
-            guard !data.isEmpty else {
-                readable.readabilityHandler = nil
-                self.finish()
-                return
-            }
-            self.lock.lock()
-            self.tail.append(data)
-            if self.tail.count > self.maximumBytes {
-                self.tail.removeFirst(self.tail.count - self.maximumBytes)
-            }
-            self.lock.unlock()
+    func consume(_ data: Data) {
+        lock.lock()
+        tail.append(data)
+        if tail.count > maximumBytes {
+            tail.removeFirst(tail.count - maximumBytes)
         }
+        lock.unlock()
     }
 }
 
 private actor JSONRPCSession {
     private let process: Process
     private let input: FileHandle
-    private let output: FileHandle
-    private let errorOutput: FileHandle
+    private let outputReader: PipeReader
+    private let errorReader: PipeReader
     private let pump: LinePump
     private let stderrDrain: StderrDrain
     private let decoder = JSONDecoder()
@@ -222,18 +206,23 @@ private actor JSONRPCSession {
         process.standardOutput = outputPipe
         process.standardError = errorPipe
 
-        let pump = LinePump(handle: outputPipe.fileHandleForReading)
-        let stderrDrain = StderrDrain(handle: errorPipe.fileHandleForReading)
+        let pump = LinePump()
+        let stderrDrain = StderrDrain()
         self.process = process
         input = inputPipe.fileHandleForWriting
-        output = outputPipe.fileHandleForReading
-        errorOutput = errorPipe.fileHandleForReading
         self.pump = pump
         self.stderrDrain = stderrDrain
 
         do {
             try process.run()
+            outputReader = try PipeReader(handle: outputPipe.fileHandleForReading) { data in
+                if let data { pump.consume(data) } else { pump.finish() }
+            }
+            errorReader = try PipeReader(handle: errorPipe.fileHandleForReading) { data in
+                if let data { stderrDrain.consume(data) } else { stderrDrain.finish() }
+            }
         } catch {
+            if process.isRunning { process.terminate() }
             throw CodexClientError.processLaunchFailed(error.localizedDescription)
         }
     }
@@ -275,12 +264,12 @@ private actor JSONRPCSession {
     }
 
     public func stop() {
-        output.readabilityHandler = nil
-        errorOutput.readabilityHandler = nil
-        try? input.close()
         if process.isRunning {
             process.terminate()
         }
+        outputReader.stop()
+        errorReader.stop()
+        try? input.close()
         pump.finish()
         stderrDrain.finish()
     }
@@ -335,11 +324,7 @@ private actor JSONRPCSession {
 
     private func triggerTimeout() {
         didTimeout = true
-        output.readabilityHandler = nil
-        errorOutput.readabilityHandler = nil
-        if process.isRunning { process.terminate() }
-        pump.finish()
-        stderrDrain.finish()
+        stop()
     }
 
     private func send(_ object: [String: Any]) throws {
@@ -455,7 +440,14 @@ public struct CodexExecutableLocator: Sendable {
 
 public protocol AccountClient: CodexIdentityReading {
     func readWeeklyUsage(profileHome: URL) async throws -> WeeklyUsage
+    func readAccountUsage(profileHome: URL) async throws -> AccountUsage
     func login(profileHome: URL) async throws -> AccountIdentity
+}
+
+extension AccountClient {
+    public func readAccountUsage(profileHome: URL) async throws -> AccountUsage {
+        AccountUsage(weekly: try await readWeeklyUsage(profileHome: profileHome))
+    }
 }
 
 public struct CodexClient: AccountClient {
@@ -465,7 +457,7 @@ public struct CodexClient: AccountClient {
     private let openBrowser: @Sendable (URL) async throws -> Void
 
     public init(locator: CodexExecutableLocator = .init(), requestTimeout: Duration = .seconds(20),
-                clientVersion: String = "0.1.13",
+                clientVersion: String = "0.1.14",
                 openBrowser: @escaping @Sendable (URL) async throws -> Void = CodexClient.defaultOpenBrowser) {
         self.locator = locator
         self.requestTimeout = requestTimeout
@@ -492,10 +484,17 @@ public struct CodexClient: AccountClient {
                 timeout: requestTimeout
             )
         }
-        return try parseIdentity(result)
+        return try parseIdentity(result, profileHome: profileHome)
     }
 
     public func readWeeklyUsage(profileHome: URL) async throws -> WeeklyUsage {
+        guard let weekly = try await readAccountUsage(profileHome: profileHome).weekly else {
+            throw CodexClientError.weeklyUsageUnavailable
+        }
+        return weekly
+    }
+
+    public func readAccountUsage(profileHome: URL) async throws -> AccountUsage {
         let result = try await withSession(profileHome: profileHome) { session in
             try await session.request(
                 method: "account/rateLimits/read",
@@ -503,7 +502,16 @@ public struct CodexClient: AccountClient {
                 timeout: requestTimeout
             )
         }
-        return try WeeklyUsageNormalizer.normalize(parseWindows(result))
+        if let reportedID = result["accountId"]?.stringValue,
+           let savedID = try CredentialIdentity.read(from: profileHome)?.accountID,
+           reportedID != savedID { throw CodexClientError.identityUnavailable }
+        let weekly = try? WeeklyUsageNormalizer.normalize(parseWindows(result))
+        let balances = AccountBalances.parse(result, bucket: usageBucket(result))
+        // A credit-only response is valid; an empty or unrelated response must not erase cached usage.
+        guard weekly != nil || balances.credits != nil || balances.availableResets != nil else {
+            throw CodexClientError.weeklyUsageUnavailable
+        }
+        return AccountUsage(weekly: weekly, balances: balances)
     }
 
     public func login(profileHome: URL) async throws -> AccountIdentity {
@@ -527,7 +535,7 @@ public struct CodexClient: AccountClient {
                 else {
                     throw CodexClientError.malformedResponse
                 }
-                try await openBrowser(authURL)
+                try await openBrowser(Self.accountSelectionURL(authURL))
 
                 let completion = try await session.notification(
                     method: "account/login/completed",
@@ -544,7 +552,7 @@ public struct CodexClient: AccountClient {
                     params: ["refreshToken": false],
                     timeout: requestTimeout
                 )
-                let identity = try parseIdentity(identityValue)
+                let identity = try parseIdentity(identityValue, profileHome: profileHome)
                 await session.stop()
                 return identity
             } catch {
@@ -574,7 +582,7 @@ public struct CodexClient: AccountClient {
         }
     }
 
-    private func parseIdentity(_ value: JSONValue) throws -> AccountIdentity {
+    private func parseIdentity(_ value: JSONValue, profileHome: URL) throws -> AccountIdentity {
         guard let account = value["account"]?.objectValue else {
             throw CodexClientError.identityUnavailable
         }
@@ -583,17 +591,43 @@ public struct CodexClient: AccountClient {
             ?? account["chatgptAccountId"]?.stringValue
             ?? account["id"]?.stringValue
         let email = account["email"]?.stringValue
-        guard accountID != nil || email != nil else {
+        let saved = try CredentialIdentity.read(from: profileHome)
+        if let accountID, let savedID = saved?.accountID, accountID != savedID {
             throw CodexClientError.identityUnavailable
         }
-        return AccountIdentity(accountID: accountID, email: email)
+        if let email, let savedEmail = saved?.email,
+           email.caseInsensitiveCompare(savedEmail) != .orderedSame {
+            throw CodexClientError.identityUnavailable
+        }
+        let resolvedID = saved?.accountID ?? accountID
+        guard resolvedID != nil || email != nil else {
+            throw CodexClientError.identityUnavailable
+        }
+        return AccountIdentity(accountID: resolvedID, email: email ?? saved?.email,
+            planType: account["planType"]?.stringValue ?? saved?.planType)
     }
 
     private func parseWindows(_ value: JSONValue) -> [RateLimitWindow] {
-        guard let bucket = value["rateLimitsByLimitId"]?["codex"] ?? value["rateLimits"] else {
+        guard let bucket = usageBucket(value) else {
             return []
         }
         return [bucket["primary"], bucket["secondary"]].compactMap(parseWindow)
+    }
+
+    static func accountSelectionURL(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var items = (components.queryItems ?? []).filter {
+            $0.name != "prompt" && $0.name != "codex_cli_simplified_flow"
+        }
+        // Keep the app-server's PKCE, state and callback; request the full account chooser.
+        items.append(URLQueryItem(name: "prompt", value: "select_account"))
+        items.append(URLQueryItem(name: "codex_cli_simplified_flow", value: "false"))
+        components.queryItems = items
+        return components.url ?? url
+    }
+
+    private func usageBucket(_ value: JSONValue) -> JSONValue? {
+        value["rateLimitsByLimitId"]?["codex"] ?? value["rateLimits"]
     }
 
     private func parseWindow(_ value: JSONValue?) -> RateLimitWindow? {

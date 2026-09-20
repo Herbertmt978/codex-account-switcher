@@ -7,13 +7,29 @@ internal static class RpcFixture
     {
         var home = Environment.GetEnvironmentVariable("CODEX_HOME") ?? throw new Exception("Missing fixture home");
         var scenario = await File.ReadAllTextAsync(Path.Combine(home, "fixture-mode"));
+        if (scenario == "stderr-failure") {
+            await Console.Error.WriteAsync(new string('x', 20_000) + "fixture startup failure");
+            await Console.Error.FlushAsync();
+            return;
+        }
         while (await Console.In.ReadLineAsync() is { } line) {
             using var document = JsonDocument.Parse(line); var message = document.RootElement;
             if (!message.TryGetProperty("id", out var id)) continue;
             var method = message.GetProperty("method").GetString();
             if (scenario == "timeout") continue;
             object result = method switch {
+                "account/read" when scenario == "metadata" => new { account = new { type = "chatgpt", email = "person@example.test", planType = "business" } },
                 "account/read" => new { account = new { accountId = "fixture", email = "fixture@example.test" } },
+                "account/rateLimits/read" when scenario == "usage-account-response" => new { account = new { accountId = "fixture", email = "fixture@example.test" } },
+                "account/rateLimits/read" when scenario == "usage-empty" => new { },
+                "account/rateLimits/read" when scenario == "usage-null" => new { rateLimits = (object?)null, rateLimitResetCredits = (object?)null },
+                "account/rateLimits/read" when scenario is "credits-only" or "usage-mismatch" => new {
+                    accountId = scenario == "usage-mismatch" ? "wrong-workspace" : "workspace",
+                    rateLimits = new { credits = new { hasCredits = true, unlimited = false, balance = "250" } },
+                    rateLimitResetCredits = new { availableCount = 2, credits = new[] {
+                        new { id = "fixture-reset", resetType = "codexRateLimits", status = "available", expiresAt = 2_000_000_000 }
+                    } }
+                },
                 "account/rateLimits/read" => new { rateLimits = new {
                     primary = new { usedPercent = 33, windowDurationMins = 300, resetsAt = 2_000_000_000 },
                     secondary = new { usedPercent = 58, windowDurationMins = 10080, resetsAt = 2_000_000_000 } } },

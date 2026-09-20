@@ -1,0 +1,89 @@
+name: Fork release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.repository == 'Herbertmt978/codex-account-switcher'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Validate version, source and release status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/validate-release-tag.mjs "$GITHUB_REF_NAME"
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse $GITHUB_REF_NAME^{commit})"
+          git merge-base --is-ancestor HEAD origin/main
+          tags=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[].tag_name')
+          if grep -Fxq "$GITHUB_REF_NAME" <<< "$tags"; then
+            echo "This release already exists; refusing to replace it." >&2
+            exit 1
+          fi
+          node --test scripts/tests/*.test.mjs
+
+  windows:
+    needs: validate
+    uses: ./.github/workflows/windows.yml
+
+  macos:
+    needs: validate
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - run: brew install fish
+      - name: Test and package the Mac app
+        run: |
+          set -euo pipefail
+          swift test
+          ./scripts/run-core-checks.sh
+          export RELEASE_VERSION="${GITHUB_REF_NAME#v}"
+          bash scripts/package-fork-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Codex-Account-Switcher-macos-arm64
+          path: |
+            .build/artifacts/Codex-Account-Switcher-macos-arm64.dmg
+            .build/artifacts/Codex-Account-Switcher-macos-arm64.dmg.sha256
+          if-no-files-found: error
+
+  publish:
+    needs: [validate, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Codex-Account-Switcher-*
+          path: dist
+          merge-multiple: true
+      - name: Verify both packages and publish as latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          node scripts/verify-release-artifacts.mjs dist "$GITHUB_REF_NAME" fork
+          gh release create "$GITHUB_REF_NAME" \
+            dist/Codex-Account-Switcher-macos-arm64.dmg \
+            dist/Codex-Account-Switcher-macos-arm64.dmg.sha256 \
+            dist/Codex-Account-Switcher-windows-x64.exe \
+            dist/Codex-Account-Switcher-windows-x64.exe.sha256 \
+            --title "$GITHUB_REF_NAME — Personal and workspace accounts" \
+            --notes-file .github/release-notes.md --draft --verify-tag
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest

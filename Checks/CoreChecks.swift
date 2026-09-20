@@ -219,7 +219,7 @@ struct CoreChecks {
         let legacyCacheStore = AccountStore(baseURL: support, activeHomeURL: activeHome)
         let legacyCache = try await legacyCacheStore.loadUsageCache()
         try require(
-            legacyCache.entries.first?.usage.fiveHourRemainingPercent == nil,
+            legacyCache.entries.first?.usage?.fiveHourRemainingPercent == nil,
             "weekly-only usage cache compatibility"
         )
 
@@ -350,11 +350,11 @@ struct CoreChecks {
         )
         let refreshedCache = try await store.loadUsageCache()
         try require(
-            refreshedCache.entries.first(where: { $0.profileID == first.id })?.usage.remainingPercent == 42,
+            refreshedCache.entries.first(where: { $0.profileID == first.id })?.usage?.remainingPercent == 42,
             "refresh replaces persisted cached usage"
         )
         try require(
-            refreshedCache.entries.first(where: { $0.profileID == first.id })?.usage.fiveHourRemainingPercent == 20,
+            refreshedCache.entries.first(where: { $0.profileID == first.id })?.usage?.fiveHourRemainingPercent == 20,
             "hidden five-hour usage is still cached"
         )
 
@@ -490,7 +490,7 @@ struct CoreChecks {
             activeHomeURL: activeHome
         ).loadUsageCache()
         try require(
-            cacheAfterFailedWrite.entries.first(where: { $0.profileID == first.id })?.usage.remainingPercent == 44,
+            cacheAfterFailedWrite.entries.first(where: { $0.profileID == first.id })?.usage?.remainingPercent == 44,
             "failed cache replacement preserves the previous complete file"
         )
         let cacheTemporaryFiles = try fileManager.contentsOfDirectory(atPath: support.path)
@@ -510,8 +510,8 @@ struct CoreChecks {
           case "$line" in
             *initialized*) state=2 ;;
             *initialize*) state=1; printf '%s\\n' '{"id":0,"result":{}}' ;;
-            *account*read*) printf '%s\\n' '{"id":1,"result":{"account":{"type":"chatgpt","email":"user@example.com","accountId":"acct-123"},"requiresOpenaiAuth":true}}' ;;
             *rateLimits*) exit 14 ;;
+            *account*read*) printf '%s\\n' '{"id":1,"result":{"account":{"type":"chatgpt","email":"user@example.com","accountId":"acct-123"},"requiresOpenaiAuth":true}}' ;;
           esac
         done
         """)
