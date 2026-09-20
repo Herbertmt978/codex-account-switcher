@@ -135,6 +135,8 @@ struct ManageAccountsView: View {
 
     private func removePage(_ account: AccountProfile) -> some View {
         VStack(alignment: .leading, spacing: 14) {
+            Text(account.contextLabel(language: model.settings.language))
+                .font(.system(size: 12, weight: .semibold))
             Text(model.text("remove_body"))
                 .font(.system(size: 11.5))
                 .foregroundStyle(.secondary)
@@ -177,6 +179,9 @@ struct ManageAccountsView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                Text(account.contextLabel(language: model.settings.language))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 5)

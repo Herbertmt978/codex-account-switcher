@@ -37,6 +37,36 @@ struct CodexClientTransportTests {
         #expect(identity.email == "fixture@example.test")
     }
 
+    @Test func realAccountReadShapeUsesCredentialWorkspaceIdentity() async throws {
+        let home = try fixtureHome("metadata")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try credential("workspace", plan: "business").write(to: home.appending(path: "auth.json"))
+        let identity = try await makeClient().readIdentity(profileHome: home)
+        #expect(identity.accountID == "workspace")
+        #expect(identity.email == "person@example.test")
+        #expect(identity.planType == "business")
+    }
+
+    @Test func creditsRemainAvailableWithoutAWeeklyWindow() async throws {
+        let home = try fixtureHome("credits-only")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try credential("workspace").write(to: home.appending(path: "auth.json"))
+        let usage = try await makeClient().readAccountUsage(profileHome: home)
+        #expect(usage.weekly == nil)
+        #expect(usage.balances?.credits?.balance == "250")
+        #expect(usage.balances?.availableResets == 2)
+        #expect(usage.balances?.resetCredits?.count == 1)
+    }
+
+    @Test func usageFromAnotherWorkspaceIsRejected() async throws {
+        let home = try fixtureHome("usage-mismatch")
+        defer { try? FileManager.default.removeItem(at: home) }
+        try credential("workspace").write(to: home.appending(path: "auth.json"))
+        await #expect(throws: CodexClientError.identityUnavailable) {
+            _ = try await makeClient().readAccountUsage(profileHome: home)
+        }
+    }
+
     @Test func aSilentServerTimesOut() async throws {
         let home = try fixtureHome("timeout")
         defer { try? FileManager.default.removeItem(at: home) }

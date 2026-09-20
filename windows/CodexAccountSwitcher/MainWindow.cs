@@ -138,11 +138,13 @@ public sealed class MainWindow : Window
             var active = row.Profile.Id == State.ActiveAccountID;
             if (manage) {
                 details.Children.Add(Text(row.Profile.DisplayName, 14, bold: true));
+                if (row.ContextLabel is { } context) details.Children.Add(Text(context, 11, muted: true));
                 details.Children.Add(Text(row.Profile.Email ?? "", 12, muted: true));
             } else {
                 var name = Text(row.Profile.DisplayName, 14, bold: true);
                 var reset = Text(row.Usage != null && !State.Settings.ShowsFiveHourUsage ? Reset(row.Usage.ResetsAt) : "", 10.5, muted: true);
                 reset.Margin = new Thickness(7, 0, 0, 0); details.Children.Add(Pair(name, reset));
+                if (row.ContextLabel is { } context) details.Children.Add(Text(context, 11, muted: true));
                 if (row.Usage is { } usage) {
                     if (State.Settings.ShowsFiveHourUsage && usage.FiveHourRemainingPercent is { } five && usage.FiveHourResetsAt is { } time)
                         details.Children.Add(UsageLine(T("five_hour"), five, Reset(time, false)));
@@ -150,6 +152,12 @@ public sealed class MainWindow : Window
                         State.Settings.ShowsFiveHourUsage ? Reset(usage.ResetsAt) : null));
                     details.ToolTip = row.UsageError;
                 } else { var missing = Text(row.UsageStatus == "idle" ? T("usage") + " —" : T("usage_unavailable"), 10.5, muted: true); missing.ToolTip = row.UsageError; details.Children.Add(missing); }
+                foreach (var line in row.BalanceLines ?? []) {
+                    var balance = Text(line, 10.5, muted: true);
+                    balance.TextWrapping = TextWrapping.Wrap;
+                    balance.TextTrimming = TextTrimming.None;
+                    details.Children.Add(balance);
+                }
             }
             var grid = new Grid { MinHeight = manage ? 32 : 50 };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(44) }); grid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -161,7 +169,7 @@ public sealed class MainWindow : Window
                 list.Children.Add(new Border { Padding = new Thickness(16, 12, 16, 12), Child = grid });
             } else {
                 var button = new Button { Content = grid, Style = (Style)FindResource("AccountRow"), Background = active ? B("Selected") : Brushes.Transparent, IsEnabled = !IsBusy };
-                AutomationProperties.SetName(button, row.Profile.DisplayName);
+                AutomationProperties.SetName(button, row.Profile.DisplayName + (row.ContextLabel is { } label ? " — " + label : ""));
                 button.Click += (_, _) => { if (!active) { target = row; page = "switch"; Render(); } };
                 var selection = new Border { Width = 3, Height = 24, Background = active ? B("Accent") : Brushes.Transparent,
                     HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false };
@@ -203,6 +211,10 @@ public sealed class MainWindow : Window
     {
         if (target == null) return;
         var content = new StackPanel { Margin = new Thickness(20, 0, 20, 20) };
+        if (target.ContextLabel is { } context) {
+            var identity = Text(context, 13, bold: true);
+            identity.Margin = new Thickness(0, 0, 0, 10); content.Children.Add(identity);
+        }
         var copy = T(page == "switch" ? "switch_body" : "remove_body").Replace("这台 Mac", "这台电脑").Replace("this Mac", "this PC");
         var text = Text(copy, 13, muted: true); text.TextWrapping = TextWrapping.Wrap; text.Margin = new Thickness(0, 0, 0, 14); content.Children.Add(text);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };

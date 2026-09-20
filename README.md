@@ -1,3 +1,5 @@
+> Development fork: separate personal/workspace profiles for the same email, per-account credit balances, and available reset credits with expiry dates. See [feature behaviour and validation limits](docs/personal-workspace-profiles.md). The upstream project and its releases are linked below.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/account-switcher-logo-white.png">

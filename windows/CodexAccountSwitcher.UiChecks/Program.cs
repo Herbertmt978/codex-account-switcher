@@ -95,6 +95,32 @@ internal static class Program
             client.State = client.State with { Settings = client.State.Settings with { ShowsFiveHourUsage = true } };
             window.Navigate("accounts"); Render(window, Path.Combine(output, "accounts-five-hour-zh.png"));
             Assert(All<TextBlock>(window).Count(text => text.Text == "5 小时") == 2, "Five-hour view must be per account.");
+            client.State = client.State with { Settings = client.State.Settings with { Language = "english" } };
+            foreach (var pair in new Dictionary<string, string> {
+                ["accounts"] = "Accounts", ["manage"] = "Manage Accounts", ["settings"] = "Settings", ["five_hour"] = "5h", ["weekly"] = "7d",
+                ["resets"] = "Resets", ["usage_unavailable"] = "Weekly allowance unavailable", ["switch_title"] = "Switch to %@?",
+                ["switch_body"] = "Codex Desktop will close and reopen. Finish or stop running Desktop tasks first. Existing CLI sessions keep their current account.",
+                ["cancel"] = "Cancel", ["switch"] = "Switch", ["active"] = "Active", ["remove"] = "Remove", ["add_account"] = "Add Account",
+                ["register_current_account"] = "Register Current Account", ["sign_in_hint"] = "Choose Personal or your workspace in the browser. Add each separately, even when they share an email."
+            }) client.State.Strings[pair.Key] = pair.Value;
+            client.State = client.State with { Accounts = [
+                client.State.Accounts[0] with { Profile = client.State.Accounts[0].Profile with { DisplayName = "Person", Email = "person@example.test" },
+                    ContextLabel = "Personal", BalanceLines = ["Credits: 125.50", "Available resets: 2", "2 × Expires 27 Sept 2026, 14:00"] },
+                client.State.Accounts[1] with { Profile = client.State.Accounts[1].Profile with { DisplayName = "Person", Email = "person@example.test" },
+                    ContextLabel = "Workspace", Usage = null, BalanceLines = ["Credits: 250", "Available resets: 0"] }
+            ] };
+            window.Navigate("accounts"); Render(window, Path.Combine(output, "personal-workspace-credits.png"));
+            Assert(All<TextBlock>(window).Any(text => text.Text == "Personal") && All<TextBlock>(window).Any(text => text.Text == "Workspace"),
+                "Same-email profiles must show their account context.");
+            Assert(All<TextBlock>(window).Any(text => text.Text == "Credits: 250"), "A workspace without weekly limits must still show credits.");
+            Assert(All<TextBlock>(window).Any(text => text.Text.Contains("Expires 27 Sept")), "Reset expiry must be visible.");
+            var workspace = All<Button>(window).Single(button => System.Windows.Automation.AutomationProperties.GetName(button) == "Person — Workspace");
+            workspace.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Render(window, Path.Combine(output, "workspace-confirmation.png"));
+            Assert(All<TextBlock>(window).Any(text => text.Text == "Workspace"), "Switch confirmation must identify the workspace context.");
+            window.Navigate("manage"); Render(window, Path.Combine(output, "same-email-management.png"));
+            Assert(All<TextBlock>(window).Count(text => text.Text == "person@example.test") == 2, "Both contexts must keep the same email.");
+            window.Navigate("accounts");
             var closed = false; window.Closed += (_, _) => closed = true;
             var beforeClose = client.Commands.Count;
             window.Close();

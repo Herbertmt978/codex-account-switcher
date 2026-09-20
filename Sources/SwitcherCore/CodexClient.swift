@@ -50,6 +50,11 @@ public enum JSONValue: Decodable, Sendable {
         return value
     }
 
+    public var arrayValue: [JSONValue]? {
+        guard case let .array(value) = self else { return nil }
+        return value
+    }
+
     subscript(key: String) -> JSONValue? { objectValue?[key] }
 }
 
@@ -455,7 +460,14 @@ public struct CodexExecutableLocator: Sendable {
 
 public protocol AccountClient: CodexIdentityReading {
     func readWeeklyUsage(profileHome: URL) async throws -> WeeklyUsage
+    func readAccountUsage(profileHome: URL) async throws -> AccountUsage
     func login(profileHome: URL) async throws -> AccountIdentity
+}
+
+extension AccountClient {
+    public func readAccountUsage(profileHome: URL) async throws -> AccountUsage {
+        AccountUsage(weekly: try await readWeeklyUsage(profileHome: profileHome))
+    }
 }
 
 public struct CodexClient: AccountClient {
@@ -492,10 +504,17 @@ public struct CodexClient: AccountClient {
                 timeout: requestTimeout
             )
         }
-        return try parseIdentity(result)
+        return try parseIdentity(result, profileHome: profileHome)
     }
 
     public func readWeeklyUsage(profileHome: URL) async throws -> WeeklyUsage {
+        guard let weekly = try await readAccountUsage(profileHome: profileHome).weekly else {
+            throw CodexClientError.weeklyUsageUnavailable
+        }
+        return weekly
+    }
+
+    public func readAccountUsage(profileHome: URL) async throws -> AccountUsage {
         let result = try await withSession(profileHome: profileHome) { session in
             try await session.request(
                 method: "account/rateLimits/read",
@@ -503,7 +522,11 @@ public struct CodexClient: AccountClient {
                 timeout: requestTimeout
             )
         }
-        return try WeeklyUsageNormalizer.normalize(parseWindows(result))
+        if let reportedID = result["accountId"]?.stringValue,
+           let savedID = try CredentialIdentity.read(from: profileHome)?.accountID,
+           reportedID != savedID { throw CodexClientError.identityUnavailable }
+        return AccountUsage(weekly: try? WeeklyUsageNormalizer.normalize(parseWindows(result)),
+            balances: AccountBalances.parse(result, bucket: usageBucket(result)))
     }
 
     public func login(profileHome: URL) async throws -> AccountIdentity {
@@ -527,7 +550,7 @@ public struct CodexClient: AccountClient {
                 else {
                     throw CodexClientError.malformedResponse
                 }
-                try await openBrowser(authURL)
+                try await openBrowser(Self.accountSelectionURL(authURL))
 
                 let completion = try await session.notification(
                     method: "account/login/completed",
@@ -544,7 +567,7 @@ public struct CodexClient: AccountClient {
                     params: ["refreshToken": false],
                     timeout: requestTimeout
                 )
-                let identity = try parseIdentity(identityValue)
+                let identity = try parseIdentity(identityValue, profileHome: profileHome)
                 await session.stop()
                 return identity
             } catch {
@@ -574,7 +597,7 @@ public struct CodexClient: AccountClient {
         }
     }
 
-    private func parseIdentity(_ value: JSONValue) throws -> AccountIdentity {
+    private func parseIdentity(_ value: JSONValue, profileHome: URL) throws -> AccountIdentity {
         guard let account = value["account"]?.objectValue else {
             throw CodexClientError.identityUnavailable
         }
@@ -583,17 +606,43 @@ public struct CodexClient: AccountClient {
             ?? account["chatgptAccountId"]?.stringValue
             ?? account["id"]?.stringValue
         let email = account["email"]?.stringValue
-        guard accountID != nil || email != nil else {
+        let saved = try CredentialIdentity.read(from: profileHome)
+        if let accountID, let savedID = saved?.accountID, accountID != savedID {
             throw CodexClientError.identityUnavailable
         }
-        return AccountIdentity(accountID: accountID, email: email)
+        if let email, let savedEmail = saved?.email,
+           email.caseInsensitiveCompare(savedEmail) != .orderedSame {
+            throw CodexClientError.identityUnavailable
+        }
+        let resolvedID = saved?.accountID ?? accountID
+        guard resolvedID != nil || email != nil else {
+            throw CodexClientError.identityUnavailable
+        }
+        return AccountIdentity(accountID: resolvedID, email: email ?? saved?.email,
+            planType: account["planType"]?.stringValue ?? saved?.planType)
     }
 
     private func parseWindows(_ value: JSONValue) -> [RateLimitWindow] {
-        guard let bucket = value["rateLimitsByLimitId"]?["codex"] ?? value["rateLimits"] else {
+        guard let bucket = usageBucket(value) else {
             return []
         }
         return [bucket["primary"], bucket["secondary"]].compactMap(parseWindow)
+    }
+
+    static func accountSelectionURL(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var items = (components.queryItems ?? []).filter {
+            $0.name != "prompt" && $0.name != "codex_cli_simplified_flow"
+        }
+        // Keep the app-server's PKCE, state and callback; request the full account chooser.
+        items.append(URLQueryItem(name: "prompt", value: "select_account"))
+        items.append(URLQueryItem(name: "codex_cli_simplified_flow", value: "false"))
+        components.queryItems = items
+        return components.url ?? url
+    }
+
+    private func usageBucket(_ value: JSONValue) -> JSONValue? {
+        value["rateLimitsByLimitId"]?["codex"] ?? value["rateLimits"]
     }
 
     private func parseWindow(_ value: JSONValue?) -> RateLimitWindow? {

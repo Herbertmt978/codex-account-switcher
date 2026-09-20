@@ -1,7 +1,7 @@
 import Foundation
 
 private enum UsageRefreshResult: Sendable {
-    case success(UUID, WeeklyUsage)
+    case success(UUID, AccountUsage)
     case failure(UUID, String)
 }
 
@@ -11,6 +11,8 @@ open class AccountController {
     public private(set) var accounts: [AccountProfile] = [] { didSet { onChange?() } }
     public private(set) var activeAccountID: UUID? { didSet { onChange?() } }
     public private(set) var usageStates: [UUID: UsageViewState] = [:] { didSet { onChange?() } }
+    public private(set) var balances: [UUID: AccountBalances] = [:] { didSet { onChange?() } }
+    private var cachedBalanceIDs: Set<UUID> = [] { didSet { onChange?() } }
     public private(set) var settings: AppSettings = .default { didSet { onChange?() } }
     public private(set) var isMutating = false { didSet { onChange?() } }
     public private(set) var isAddingAccount = false { didSet { onChange?() } }
@@ -50,6 +52,12 @@ open class AccountController {
         return usageStates[activeAccountID]?.displayedUsage?.remainingPercent
     }
 
+    public func balanceLines(for id: UUID) -> [String] {
+        guard let balance = balances[id] else { return [] }
+        let lines = balance.lines(language: settings.language)
+        return cachedBalanceIDs.contains(id) ? [text("cached_balances")] + lines : lines
+    }
+
     public func start() async {
         guard !hasStarted else { return }
         hasStarted = true
@@ -65,7 +73,8 @@ open class AccountController {
                     email: identity.email,
                     accountID: identity.accountID,
                     createdAt: Date(),
-                    lastUsedAt: Date()
+                    lastUsedAt: Date(),
+                    planType: identity.planType
                 )
                 try await store.importCurrentProfile(profile)
                 registry = try await store.loadRegistry()
@@ -142,7 +151,7 @@ open class AccountController {
             for (id, home) in targets {
                 group.addTask { [codex] in
                     do {
-                        return .success(id, try await codex.readWeeklyUsage(profileHome: home))
+                        return .success(id, try await codex.readAccountUsage(profileHome: home))
                     } catch {
                         return .failure(id, error.localizedDescription)
                     }
@@ -152,14 +161,18 @@ open class AccountController {
                 switch result {
                 case let .success(id, usage):
                     guard accounts.contains(where: { $0.id == id }) else { continue }
-                    usageStates[id] = .loaded(usage)
+                    usageStates[id] = usage.weekly.map(UsageViewState.loaded)
+                        ?? .unavailable(text("weekly_usage_not_provided"))
+                    balances[id] = usage.balances
+                    cachedBalanceIDs.remove(id)
                     do {
-                        try await store.cacheWeeklyUsage(usage, profileID: id)
+                        try await store.cacheAccountUsage(usage, profileID: id)
                     } catch {
                         showError(error)
                     }
                 case let .failure(id, message):
                     guard accounts.contains(where: { $0.id == id }) else { continue }
+                    if balances[id] != nil { cachedBalanceIDs.insert(id) }
                     if let cached = usageStates[id]?.displayedUsage {
                         usageStates[id] = .stale(cached, message)
                     } else {
@@ -231,7 +244,8 @@ open class AccountController {
                 email: identity.email,
                 accountID: identity.accountID,
                 createdAt: Date(),
-                lastUsedAt: nil
+                lastUsedAt: nil,
+                planType: identity.planType
             )
             try await store.addProfile(profile)
             apply(try await store.loadRegistry())
@@ -270,6 +284,7 @@ open class AccountController {
             try await store.removeAccount(id: id)
             apply(try await store.loadRegistry())
             usageStates[id] = nil
+            balances[id] = nil
         } catch {
             showError(error)
         }
@@ -310,12 +325,16 @@ open class AccountController {
         accounts = registry.accounts
         activeAccountID = registry.activeAccountID
         usageStates = usageStates.filter { id, _ in registry.accounts.contains(where: { $0.id == id }) }
+        balances = balances.filter { id, _ in registry.accounts.contains(where: { $0.id == id }) }
+        cachedBalanceIDs.formIntersection(registry.accounts.map(\.id))
     }
 
     private func apply(_ cache: UsageCache) {
         let validAccountIDs = Set(accounts.map(\.id))
         for entry in cache.entries where validAccountIDs.contains(entry.profileID) {
-            usageStates[entry.profileID] = .loaded(entry.usage)
+            if let usage = entry.usage { usageStates[entry.profileID] = .loaded(usage) }
+            balances[entry.profileID] = entry.balances
+            if entry.balances != nil { cachedBalanceIDs.insert(entry.profileID) }
         }
     }
 

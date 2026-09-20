@@ -95,7 +95,8 @@ struct MenuBarPopover: View {
                                 usageState: model.usageStates[account.id] ?? .idle,
                                 isActive: account.id == model.activeAccountID,
                                 language: model.settings.language,
-                                showsFiveHourUsage: model.settings.showsFiveHourUsage
+                                showsFiveHourUsage: model.settings.showsFiveHourUsage,
+                                balanceLines: model.balanceLines(for: account.id)
                             )
                         }
                         .buttonStyle(.plain)
@@ -179,6 +180,8 @@ private struct SwitchConfirmationPage: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 14) {
+                Text(account.contextLabel(language: model.settings.language))
+                    .font(.system(size: 12, weight: .semibold))
                 Text(model.text("switch_body"))
                     .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)

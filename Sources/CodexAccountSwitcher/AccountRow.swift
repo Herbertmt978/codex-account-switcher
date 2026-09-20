@@ -7,6 +7,7 @@ struct AccountRow: View {
     let isActive: Bool
     let language: AppLanguage
     let showsFiveHourUsage: Bool
+    var balanceLines: [String] = []
     @State private var isHovering = false
 
     var body: some View {
@@ -38,7 +39,16 @@ struct AccountRow: View {
                     }
                 }
 
+                Text(account.contextLabel(language: language))
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
                 usageContent
+                ForEach(Array(balanceLines.enumerated()), id: \.offset) { _, line in
+                    Text(line)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .frame(minHeight: 50)

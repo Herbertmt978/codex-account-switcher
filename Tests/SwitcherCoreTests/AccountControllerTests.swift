@@ -95,7 +95,7 @@ struct AccountControllerTests {
         await fixture.model.waitForWeeklyUsageRefresh()
         #expect(fixture.model.usageStates[id]?.displayedUsage?.remainingPercent == 72)
         #expect(fixture.model.usageStates[id]?.refreshError != nil)
-        #expect(try await fixture.store.loadUsageCache().entries.first?.usage.remainingPercent == 72)
+        #expect(try await fixture.store.loadUsageCache().entries.first?.usage?.remainingPercent == 72)
     }
 
     @Test func settingsAreSavedImmediately() async throws {
