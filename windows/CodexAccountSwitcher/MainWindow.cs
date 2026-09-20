@@ -30,7 +30,7 @@ public sealed class MainWindow : Window
     {
         this.client = client; this.native = native ?? new NativeSettings();
         Icon = System.Windows.Media.Imaging.BitmapFrame.Create(App.IconUri);
-        Title = "Codex Account Switcher"; Width = 420; SizeToContent = SizeToContent.Height;
+        Title = "Codex Account Switcher"; Width = 520; SizeToContent = SizeToContent.Height;
         WindowStyle = WindowStyle.SingleBorderWindow; ResizeMode = ResizeMode.CanMinimize;
         Background = B("Surface"); ShowInTaskbar = true;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;

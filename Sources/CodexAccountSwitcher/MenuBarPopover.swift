@@ -48,7 +48,7 @@ struct MenuBarPopover: View {
                 }
             }
         }
-        .frame(width: 326)
+        .frame(width: 420)
         .onAppear {
             page = .accounts
         }

@@ -14,8 +14,8 @@ struct AccountBalancesTests {
         #expect(balance.availableResets == 3)
         #expect(balance.resetCredits?.count == 2)
         #expect(balance.resetCredits?.first?.expiresAt == Date(timeIntervalSince1970: 2_000_000_000))
-        #expect(balance.lines(language: .english).contains("1 × No expiry"))
-        #expect(balance.lines(language: .english).last == "Expiry dates shown for some available resets")
+        #expect(balance.lines(language: .english).count == 3)
+        #expect(balance.lines(language: .english).last?.hasPrefix("Next known reset expiry: ") == true)
     }
 
     @Test func unknownDoesNotBecomeZeroOrNoExpiry() throws {
@@ -26,7 +26,25 @@ struct AccountBalancesTests {
         let countOnly = try parse(#"{"rateLimitResetCredits":{"availableCount":4,"credits":null}}"#)
         #expect(countOnly.availableResets == 4)
         #expect(countOnly.resetCredits == nil)
-        #expect(countOnly.lines(language: .english).last == "Reset expiry dates unavailable")
+        #expect(countOnly.lines(language: .english).last == "Reset expiry unavailable")
+    }
+
+    @Test func onlyTheEarliestExpiryIsShownWithTheFullAvailableCount() throws {
+        let balance = try parse(#"{"rateLimitResetCredits":{"availableCount":4,"credits":[{"status":"available","resetType":"codexRateLimits","expiresAt":2100000000},{"status":"available","resetType":"codexRateLimits","expiresAt":null},{"status":"available","resetType":"codexRateLimits","expiresAt":2000000000},{"status":"available","resetType":"codexRateLimits","expiresAt":2000000000}]}}"#)
+        let earliestOnly = AccountBalances(credits: nil, availableResets: 1,
+            resetCredits: [.init(expiresAt: Date(timeIntervalSince1970: 2_000_000_000))])
+        let lines = balance.lines(language: .english)
+        #expect(lines.count == 3)
+        #expect(lines[1] == "Available resets: 4")
+        #expect(lines.last == earliestOnly.lines(language: .english).last)
+        #expect(lines.last?.hasPrefix("Next reset expiry: ") == true)
+    }
+
+    @Test func noExpiryRequiresCompleteDetails() throws {
+        let noExpiry = try parse(#"{"rateLimitResetCredits":{"availableCount":1,"credits":[{"status":"available","resetType":"codexRateLimits","expiresAt":null}]}}"#)
+        #expect(noExpiry.lines(language: .english).last == "Resets do not expire")
+        let partial = AccountBalances(credits: nil, availableResets: 2, resetCredits: noExpiry.resetCredits)
+        #expect(partial.lines(language: .english).last == "Reset expiry unavailable")
     }
 
     @Test func redeemedAndUnknownResetTypesAreNotAnAvailableHistory() throws {

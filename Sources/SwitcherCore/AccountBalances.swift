@@ -57,18 +57,17 @@ public struct AccountBalances: Codable, Equatable, Sendable {
         guard let resetCredits, !resetCredits.isEmpty else {
             result.append(text("reset_expiry_unavailable")); return result
         }
-        let formatter = DateFormatter()
-        formatter.locale = language == .simplifiedChinese ? Locale(identifier: "zh_CN")
-            : (language == .english ? Locale(identifier: "en_GB") : .current)
-        formatter.dateStyle = .medium; formatter.timeStyle = .short
-        let dates = Dictionary(grouping: resetCredits, by: \.expiresAt)
-        for date in dates.keys.sorted(by: { ($0 ?? .distantFuture) < ($1 ?? .distantFuture) }) {
-            let count = dates[date]!.count
-            let expiry = date.map { "\(text("credit_expires")) \(formatter.string(from: $0))" }
-                ?? text("credit_no_expiry")
-            result.append("\(count) × \(expiry)")
+        let hasAllExpiries = resetCredits.count >= availableResets
+        if let nextExpiry = resetCredits.compactMap(\.expiresAt).min() {
+            let formatter = DateFormatter()
+            formatter.locale = language == .simplifiedChinese ? Locale(identifier: "zh_CN")
+                : (language == .english ? Locale(identifier: "en_GB") : .current)
+            formatter.dateStyle = .medium; formatter.timeStyle = .short
+            let label = text(hasAllExpiries ? "next_reset_expiry" : "next_known_reset_expiry")
+            result.append("\(label): \(formatter.string(from: nextExpiry))")
+        } else {
+            result.append(text(hasAllExpiries ? "resets_no_expiry" : "reset_expiry_unavailable"))
         }
-        if resetCredits.count < availableResets { result.append(text("reset_expiry_partial")) }
         return result
     }
 }

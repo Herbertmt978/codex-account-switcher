@@ -65,8 +65,8 @@ internal static class Program
                 }
             }
             Render(window, Path.Combine(output, "accounts-zh.png"));
-            Assert(Math.Abs(window.ActualWidth - 420) < 2 && window.ActualHeight < 360,
-                $"Home must be a compact 420 DIP window (actual {window.ActualWidth} × {window.ActualHeight}).");
+            Assert(Math.Abs(window.ActualWidth - 520) < 2 && window.ActualHeight < 360,
+                $"Home must provide a 520 DIP window for account details (actual {window.ActualWidth} × {window.ActualHeight}).");
             Assert(window.ShowInTaskbar && !window.Topmost && window.WindowStyle == WindowStyle.SingleBorderWindow,
                 "Windows must use a normal titled window visible in the taskbar.");
             var other = new Window { Width = 100, Height = 100, ShowInTaskbar = false };
@@ -105,7 +105,7 @@ internal static class Program
             }) client.State.Strings[pair.Key] = pair.Value;
             client.State = client.State with { Accounts = [
                 client.State.Accounts[0] with { Profile = client.State.Accounts[0].Profile with { DisplayName = "Person", Email = "person@example.test" },
-                    ContextLabel = "Personal", BalanceLines = ["Credits: 125.50", "Available resets: 2", "2 × Expires 27 Sept 2026, 14:00"] },
+                    ContextLabel = "Personal", BalanceLines = ["Credits: 125.50", "Available resets: 2", "Next reset expiry: 27 Sept 2026, 14:00"] },
                 client.State.Accounts[1] with { Profile = client.State.Accounts[1].Profile with { DisplayName = "Person", Email = "person@example.test" },
                     ContextLabel = "Workspace", Usage = null, BalanceLines = ["Credits: 250", "Available resets: 0"] }
             ] };
@@ -113,7 +113,8 @@ internal static class Program
             Assert(All<TextBlock>(window).Any(text => text.Text == "Personal") && All<TextBlock>(window).Any(text => text.Text == "Workspace"),
                 "Same-email profiles must show their account context.");
             Assert(All<TextBlock>(window).Any(text => text.Text == "Credits: 250"), "A workspace without weekly limits must still show credits.");
-            Assert(All<TextBlock>(window).Any(text => text.Text.Contains("Expires 27 Sept")), "Reset expiry must be visible.");
+            var nextExpiry = All<TextBlock>(window).Single(text => text.Text.StartsWith("Next reset expiry:"));
+            Assert(nextExpiry.ActualHeight < nextExpiry.FontSize * 2, "The next reset expiry must fit on one line at the default width.");
             var workspace = All<Button>(window).Single(button => System.Windows.Automation.AutomationProperties.GetName(button) == "Person — Workspace");
             workspace.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Render(window, Path.Combine(output, "workspace-confirmation.png"));

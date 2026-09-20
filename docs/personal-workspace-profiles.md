@@ -14,10 +14,10 @@ Each profile refreshes its own `account/rateLimits/read` response. The account r
 
 - remaining usage credits, or Unlimited when explicitly reported;
 - the number of available usage-limit resets;
-- expiry dates for available reset credits, grouped by date, including explicit non-expiring credits;
+- only the next expiry date among available reset credits, or an explicit message when none expire;
 - the existing weekly allowance and optional five-hour allowance with their scheduled reset times.
 
-Credit balances remain visible for accounts that have no weekly allowance window. Missing values are shown as unavailable rather than zero. The service's reset count is authoritative: its detail list may be shorter, or absent. In those cases the app says that expiry information is partial or unavailable. Dates use the computer's local time zone.
+Credit balances remain visible for accounts that have no weekly allowance window. Missing values are shown as unavailable rather than zero. The service's reset count is authoritative: its detail list may be shorter, or absent. With partial details, the earliest supplied date is labelled “Next known reset expiry”; without a date, expiry is unavailable unless all available resets are explicitly non-expiring. Dates use the computer's local time zone. The wider account window gives these details more room without listing every expiry.
 
 This is read-only tracking. It does not redeem a reset, buy credits, infer entitlement from allowance percentages, or keep reset-use history. Opaque reset identifiers are not stored or displayed. The available balance response has no purchased-credit expiry field, so the app does not invent one.
 
