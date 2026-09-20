@@ -510,8 +510,8 @@ struct CoreChecks {
           case "$line" in
             *initialized*) state=2 ;;
             *initialize*) state=1; printf '%s\\n' '{"id":0,"result":{}}' ;;
-            *account*read*) printf '%s\\n' '{"id":1,"result":{"account":{"type":"chatgpt","email":"user@example.com","accountId":"acct-123"},"requiresOpenaiAuth":true}}' ;;
             *rateLimits*) exit 14 ;;
+            *account*read*) printf '%s\\n' '{"id":1,"result":{"account":{"type":"chatgpt","email":"user@example.com","accountId":"acct-123"},"requiresOpenaiAuth":true}}' ;;
           esac
         done
         """)

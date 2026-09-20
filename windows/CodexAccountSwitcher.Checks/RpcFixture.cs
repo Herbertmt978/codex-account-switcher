@@ -15,6 +15,9 @@ internal static class RpcFixture
             object result = method switch {
                 "account/read" when scenario == "metadata" => new { account = new { type = "chatgpt", email = "person@example.test", planType = "business" } },
                 "account/read" => new { account = new { accountId = "fixture", email = "fixture@example.test" } },
+                "account/rateLimits/read" when scenario == "usage-account-response" => new { account = new { accountId = "fixture", email = "fixture@example.test" } },
+                "account/rateLimits/read" when scenario == "usage-empty" => new { },
+                "account/rateLimits/read" when scenario == "usage-null" => new { rateLimits = (object?)null, rateLimitResetCredits = (object?)null },
                 "account/rateLimits/read" when scenario is "credits-only" or "usage-mismatch" => new {
                     accountId = scenario == "usage-mismatch" ? "wrong-workspace" : "workspace",
                     rateLimits = new { credits = new { hasCredits = true, unlimited = false, balance = "250" } },

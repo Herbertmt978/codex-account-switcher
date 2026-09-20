@@ -525,8 +525,13 @@ public struct CodexClient: AccountClient {
         if let reportedID = result["accountId"]?.stringValue,
            let savedID = try CredentialIdentity.read(from: profileHome)?.accountID,
            reportedID != savedID { throw CodexClientError.identityUnavailable }
-        return AccountUsage(weekly: try? WeeklyUsageNormalizer.normalize(parseWindows(result)),
-            balances: AccountBalances.parse(result, bucket: usageBucket(result)))
+        let weekly = try? WeeklyUsageNormalizer.normalize(parseWindows(result))
+        let balances = AccountBalances.parse(result, bucket: usageBucket(result))
+        // A credit-only response is valid; an empty or unrelated response must not erase cached usage.
+        guard weekly != nil || balances.credits != nil || balances.availableResets != nil else {
+            throw CodexClientError.weeklyUsageUnavailable
+        }
+        return AccountUsage(weekly: weekly, balances: balances)
     }
 
     public func login(profileHome: URL) async throws -> AccountIdentity {

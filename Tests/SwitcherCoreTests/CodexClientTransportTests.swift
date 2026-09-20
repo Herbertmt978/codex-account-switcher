@@ -67,6 +67,16 @@ struct CodexClientTransportTests {
         }
     }
 
+    @Test func missingUsageAndBalancesAreRejectedInsteadOfReplacingCachedValues() async throws {
+        for scenario in ["usage-account-response", "usage-empty", "usage-null"] {
+            let home = try fixtureHome(scenario)
+            defer { try? FileManager.default.removeItem(at: home) }
+            await #expect(throws: CodexClientError.weeklyUsageUnavailable) {
+                _ = try await makeClient().readAccountUsage(profileHome: home)
+            }
+        }
+    }
+
     @Test func aSilentServerTimesOut() async throws {
         let home = try fixtureHome("timeout")
         defer { try? FileManager.default.removeItem(at: home) }
