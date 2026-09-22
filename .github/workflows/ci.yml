@@ -26,6 +26,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Check SEO and GEO consistency
+        if: github.repository == 'liuzhao1225/codex-account-switcher'
         run: node scripts/check-site-geo.mjs
       - name: Check platform release routing
         run: node --test scripts/tests/*.test.mjs

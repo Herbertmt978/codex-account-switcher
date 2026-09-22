@@ -1,5 +1,7 @@
 This fork adds separate Personal and Workspace profiles for accounts that share an email address.
 
+- Rediscover Codex Desktop for every handoff and match Store processes by stable app identity across package updates.
+- Explain revoked sign-ins with recovery steps and mark cached balances as stale after refresh fails.
 - Read each profile's usage, credit balance and current available reset count independently.
 - Show whole credit numbers, equal-width usage tracks and only the next reset-credit expiry in a wider window.
 - Refresh new profiles immediately and prevent concurrent Windows account reads from stalling.

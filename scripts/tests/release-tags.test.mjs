@@ -49,3 +49,10 @@ test('fork releases wait for both verified packages and remain separate from ups
   assert.match(packaging, /SwitcherReleasePage/);
   assert.match(packaging, /kill -0 "\$app_pid"/);
 });
+
+test('upstream website metadata checks do not gate the fork release version', () => {
+  const ci = fs.readFileSync('.github/workflows/ci.yml', 'utf8');
+  const pages = fs.readFileSync('.github/workflows/pages.yml', 'utf8');
+  assert.match(ci, /name: Check SEO and GEO consistency\s+if: github\.repository == 'liuzhao1225\/codex-account-switcher'/);
+  assert.match(pages, /github\.repository == 'liuzhao1225\/codex-account-switcher'/);
+});
