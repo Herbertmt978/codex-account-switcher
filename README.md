@@ -1,4 +1,4 @@
-> Herbertmt978 fork: separate personal/workspace profiles, per-account credits and current available resets. [Download v0.1.15 for Windows or Mac](https://github.com/Herbertmt978/codex-account-switcher/releases/latest). The Mac build is ad-hoc signed and not Apple-notarised; see [Mac installation](docs/platform-releases.md#mac-installation). Original author attribution is preserved below.
+> Herbertmt978 fork: separate personal/workspace profiles, per-account credits and current available resets. [Download v0.1.16 for Windows or Mac](https://github.com/Herbertmt978/codex-account-switcher/releases/latest). The Mac build is ad-hoc signed and not Apple-notarised; see [Mac installation](docs/platform-releases.md#mac-installation). Original author attribution is preserved below.
 
 <p align="center">
   <picture>
@@ -62,7 +62,7 @@ OpenAI's official account switcher currently applies to ChatGPT on the web and [
 
 ## Download
 
-[Latest version v0.1.15](https://github.com/Herbertmt978/codex-account-switcher/releases/latest) includes both macOS and Windows packages with SHA-256 checksums.
+[Latest version v0.1.16](https://github.com/Herbertmt978/codex-account-switcher/releases/latest) includes both macOS and Windows packages with SHA-256 checksums.
 
 | Platform | Requirements | Download and install |
 | --- | --- | --- |

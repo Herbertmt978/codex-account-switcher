@@ -59,7 +59,7 @@ struct ManageAccountsView: View {
                 .padding(.vertical, 24)
             } else {
                 VStack(spacing: 2) {
-                    ForEach(model.accounts) { account in
+                    ForEach(model.displayAccounts) { account in
                         managedAccountRow(account)
                     }
                 }

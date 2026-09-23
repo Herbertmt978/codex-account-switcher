@@ -27,7 +27,18 @@ public struct AccountProfile: Codable, Identifiable, Equatable, Hashable, Sendab
              "edu", "edu_plus", "edu_pro": key = "workspace_account"
         default: key = "account_context_unknown"
         }
-        return L10n.string(key, language: language)
+        let context = L10n.string(key, language: language)
+        let planKey: String?
+        switch planType {
+        case "free": planKey = "plan_free"
+        case "go": planKey = "plan_go"
+        case "plus": planKey = "plan_plus"
+        case "prolite": planKey = "plan_pro_5x"
+        case "pro": planKey = "plan_pro_20x"
+        default: planKey = nil
+        }
+        guard let planKey else { return context }
+        return "\(context) · \(L10n.string(planKey, language: language))"
     }
 
     public var initials: String {

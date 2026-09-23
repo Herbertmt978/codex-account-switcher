@@ -52,6 +52,12 @@ open class AccountController {
         return usageStates[activeAccountID]?.displayedUsage?.remainingPercent
     }
 
+    public var displayAccounts: [AccountProfile] {
+        guard let activeAccountID,
+              let active = accounts.first(where: { $0.id == activeAccountID }) else { return accounts }
+        return [active] + accounts.filter { $0.id != activeAccountID }
+    }
+
     public func balanceLines(for id: UUID) -> [String] {
         guard let balance = balances[id] else { return [] }
         let lines = balance.lines(language: settings.language)
@@ -142,10 +148,22 @@ open class AccountController {
     }
 
     private func performWeeklyUsageRefresh() async {
+        // Desktop can refresh its credential after the saved profile copy was made.
+        // Confirm the live identity before attributing its usage to an account.
+        let useActiveHome = !isMutating
+        if useActiveHome { await confirmActiveIdentity() }
+        let liveAccountID = useActiveHome && activeIdentityConfirmed ? activeAccountID : nil
+        let liveHome = liveAccountID == nil ? nil : await store.activeCodexHome()
         let targets = await withTaskGroup(of: (UUID, URL).self, returning: [(UUID, URL)].self) { group in
             for account in accounts {
                 group.addTask { [store] in
-                    (account.id, await store.profileHome(id: account.id))
+                    let home: URL
+                    if account.id == liveAccountID, let liveHome {
+                        home = liveHome
+                    } else {
+                        home = await store.profileHome(id: account.id)
+                    }
+                    return (account.id, home)
                 }
             }
             var values: [(UUID, URL)] = []
@@ -168,6 +186,22 @@ open class AccountController {
                 switch result {
                 case let .success(id, usage):
                     guard accounts.contains(where: { $0.id == id }) else { continue }
+                    if id == liveAccountID {
+                        do {
+                            guard try await store.syncActiveCredentialIfMatching(id: id) else {
+                                activeIdentityConfirmed = false
+                                if let cached = usageStates[id]?.displayedUsage {
+                                    usageStates[id] = .stale(cached, text("active_unconfirmed"))
+                                } else {
+                                    usageStates[id] = .unavailable(text("active_unconfirmed"))
+                                }
+                                continue
+                            }
+                            apply(try await store.loadRegistry())
+                        } catch {
+                            showError(error)
+                        }
+                    }
                     usageStates[id] = usage.weekly.map(UsageViewState.loaded)
                         ?? .unavailable(text("weekly_usage_not_provided"))
                     balances[id] = usage.balances
@@ -194,11 +228,16 @@ open class AccountController {
     public func switchAccount(to id: UUID) async {
         guard id != activeAccountID, !isMutating else { return }
         isMutating = true
-        defer { isMutating = false }
+        var shouldRefresh = false
+        defer {
+            isMutating = false
+            if shouldRefresh { refreshWeeklyUsage() }
+        }
         do {
             try await switchService.switchAccount(to: id)
             apply(try await store.loadRegistry())
             activeIdentityConfirmed = true
+            shouldRefresh = true
         } catch let error as OperationError {
             if error.stage == .reopenDesktop {
                 do {
@@ -361,6 +400,7 @@ open class AccountController {
                let profile = accounts.first(where: { $0.id == activeID }),
                identity.matches(profile) {
                 activeIdentityConfirmed = true
+                await syncConfirmedActiveCredential(id: activeID, planType: identity.planType)
                 return
             }
             let matches = accounts.filter { identity.matches($0) }
@@ -371,8 +411,21 @@ open class AccountController {
             try await store.commitActiveAccountID(matches[0].id)
             apply(try await store.loadRegistry())
             activeIdentityConfirmed = true
+            await syncConfirmedActiveCredential(id: matches[0].id, planType: identity.planType)
         } catch {
             activeIdentityConfirmed = false
+        }
+    }
+
+    private func syncConfirmedActiveCredential(id: UUID, planType: String?) async {
+        do {
+            guard try await store.syncActiveCredentialIfMatching(id: id, planType: planType) else {
+                activeIdentityConfirmed = false
+                return
+            }
+            apply(try await store.loadRegistry())
+        } catch {
+            showError(error)
         }
     }
 

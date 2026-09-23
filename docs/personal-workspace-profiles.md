@@ -8,9 +8,13 @@ The app stores each context's complete credential separately. It identifies the 
 
 Existing profiles recover missing identity and plan metadata from their own saved credential. Profile IDs, saved credential bytes, active selection and cached usage are preserved. Missing or unreadable metadata is left unchanged; it is never inferred from the active account's credential.
 
+The active profile appears first in account lists; the saved profile order is unchanged. Once the live Codex identity matches a saved profile, the switcher refreshes that profile's saved credential from Codex's active home at startup and during periodic refreshes. It checks the account identity again before copying, so an external sign-in to a different account cannot overwrite the selected profile. After a successful switch, the newly active account is refreshed. Inactive profiles continue to use their own saved credentials.
+
+Personal profiles show the subscription tier reported by Codex beside their context, including Free, Pro ×5 and Pro ×20. The tier is refreshed from the confirmed active login. Subscription renewal dates are not shown because Codex's account response does not provide them.
+
 ## Credits and available resets
 
-Each profile refreshes its own `account/rateLimits/read` response. The account row shows:
+Each profile refreshes its own `account/rateLimits/read` response. The active profile uses the verified live Codex home; inactive profiles use their saved credential homes. The account row shows:
 
 - remaining usage credits as whole numbers (rounded down for display), or Unlimited when explicitly reported;
 - the number of available usage-limit resets;
@@ -29,7 +33,7 @@ Older Codex runtimes may omit reset-credit metadata. The UI reports it as unavai
 
 ## Verification
 
-Synthetic tests cover separate same-email contexts, duplicate rejection, switching in both directions, restoration after a wrong-workspace response, legacy identity hydration, independent balance caches, credit-only accounts, whole-number presentation, partial expiry details and omission of redeemed credits. Native Windows checks exercise same-email account rows, confirmations and equal-width progress tracks.
+Synthetic tests cover separate same-email contexts, duplicate rejection, switching in both directions, restoration after a wrong-workspace response, legacy identity hydration, independent balance caches, credit-only accounts, whole-number presentation, partial expiry details and omission of redeemed credits. They also cover active-first display, live usage with a revoked saved credential, credential refresh and refusal to copy another account's credential. Native Windows checks exercise same-email account rows, confirmations and equal-width progress tracks.
 
 Windows reads Codex output on cancellable native pipe readers. Transport tests cover 32 simultaneous account reads, a silent server, sign-in cancellation, stderr drainage, and stopping an idle reader while its writer remains open.
 

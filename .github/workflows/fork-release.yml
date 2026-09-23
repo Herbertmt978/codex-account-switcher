@@ -84,6 +84,6 @@ jobs:
             dist/Codex-Account-Switcher-macos-arm64.dmg.sha256 \
             dist/Codex-Account-Switcher-windows-x64.exe \
             dist/Codex-Account-Switcher-windows-x64.exe.sha256 \
-            --title "$GITHUB_REF_NAME — Personal and workspace accounts" \
+            --title "$GITHUB_REF_NAME" \
             --notes-file .github/release-notes.md --draft --verify-tag
           gh release edit "$GITHUB_REF_NAME" --draft=false --latest
