@@ -102,10 +102,10 @@ struct AccountControllerTests {
         #expect(fixture.model.activeAccountID == matching.id)
         #expect(fixture.model.activeIdentityConfirmed)
         #expect(try await fixture.store.loadRegistry().activeAccountID == matching.id)
-        #expect(try String(contentsOf: fixture.active.appendingPathComponent("auth.json"), encoding: .utf8)
-            == "fixture-secret-token")
-        #expect(try String(contentsOf: await fixture.store.profileHome(id: matching.id).appendingPathComponent("auth.json"), encoding: .utf8)
-            == "saved-Current")
+        #expect(try Data(contentsOf: fixture.active.appendingPathComponent("auth.json"))
+            == credential("demo-account", email: "demo@example.test"))
+        #expect(try Data(contentsOf: await fixture.store.profileHome(id: matching.id).appendingPathComponent("auth.json"))
+            == credential("demo-account", email: "demo@example.test"))
     }
 
     @Test func startupLeavesAmbiguousSavedProfilesUntouched() async throws {
@@ -220,7 +220,7 @@ struct AccountControllerTests {
         await fixture.model.start()
         let data = try JSONEncoder().encode(fixture.model.snapshot)
         let json = String(decoding: data, as: UTF8.self)
-        #expect(!json.contains("fixture-secret-token"))
+        #expect(!json.contains("id_token"))
         #expect(json.contains("demo@example.test"))
     }
 }
@@ -242,7 +242,8 @@ private struct ControllerFixture {
             switchService: SwitchService(desktop: FixtureDesktop(), store: store, codex: client))
     }
     func writeActiveCredential() throws {
-        try Data("fixture-secret-token".utf8).write(to: active.appendingPathComponent("auth.json"))
+        try credential("demo-account", email: "demo@example.test")
+            .write(to: active.appendingPathComponent("auth.json"))
     }
     func clean() { try? FileManager.default.removeItem(at: root) }
 }

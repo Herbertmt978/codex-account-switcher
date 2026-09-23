@@ -24,7 +24,7 @@ public struct AccountSnapshot: Encodable, Sendable {
 extension AccountController {
     public var snapshot: AccountSnapshot {
         AccountSnapshot(
-            accounts: accounts.map { account in
+            accounts: displayAccounts.map { account in
                 AccountSnapshot.Row(profile: account, initials: account.initials,
                     usage: usageStates[account.id]?.displayedUsage,
                     usageError: usageStates[account.id]?.presentationError,

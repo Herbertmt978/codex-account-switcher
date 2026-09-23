@@ -82,7 +82,7 @@ struct MenuBarPopover: View {
                     .padding(.vertical, 28)
             } else {
                 VStack(spacing: 2) {
-                    ForEach(model.accounts) { account in
+                    ForEach(model.displayAccounts) { account in
                         Button {
                             if account.id == model.activeAccountID {
                                 NSApp.keyWindow?.close()

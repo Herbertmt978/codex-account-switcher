@@ -16,6 +16,16 @@ struct WorkspaceAccountTests {
         #expect(!identity.matches(profile("personal", email: "someone-else@example.test")))
     }
 
+    @Test func personalPlanTypesShowTheirSubscriptionTier() {
+        var account = profile("personal")
+        account.planType = "free"
+        #expect(account.contextLabel(language: .english) == "Personal · Free")
+        account.planType = "prolite"
+        #expect(account.contextLabel(language: .english) == "Personal · Pro ×5")
+        account.planType = "pro"
+        #expect(account.contextLabel(language: .english) == "Personal · Pro ×20")
+    }
+
     @Test func credentialMetadataIdentifiesTheSelectedAccount() throws {
         let identity = try #require(try CredentialIdentity.decode(credential("workspace", plan: "business")))
         #expect(identity.accountID == "workspace")
@@ -142,6 +152,130 @@ struct WorkspaceAccountTests {
         #expect(restarted.balances[workspace.id]?.credits?.balance == "250")
         #expect(restarted.balanceLines(for: personal.id).first == "Cached balances — awaiting refresh")
     }
+
+    @MainActor @Test func activeUsageUsesVerifiedLiveCredentialWhenSavedCopyIsRevoked() async throws {
+        let fixture = try WorkspaceFixture()
+        defer { fixture.clean() }
+        var personal = profile("personal")
+        personal.planType = "prolite"
+        let workspace = profile("workspace")
+        try credential("personal").write(to: fixture.active.appending(path: "auth.json"))
+        try await fixture.store.importCurrentProfile(personal)
+        let savedHome = await fixture.store.profileHome(id: personal.id)
+        var staleCredential = try #require(JSONSerialization.jsonObject(with: credential("personal", plan: "prolite")) as? [String: Any])
+        var staleTokens = try #require(staleCredential["tokens"] as? [String: Any])
+        staleTokens["access_token"] = "revoked-fixture"
+        staleCredential["tokens"] = staleTokens
+        try JSONSerialization.data(withJSONObject: staleCredential).write(to: savedHome.appending(path: "auth.json"))
+        let workspaceHome = try await fixture.store.createProfileDirectory(id: workspace.id)
+        try credential("workspace").write(to: workspaceHome.appending(path: "auth.json"))
+        try await fixture.store.addProfile(workspace)
+
+        let client = LiveHomeUsageClient(activeHome: fixture.active, rejectedSavedHome: savedHome)
+        let model = AccountController(store: fixture.store, codex: client,
+            switchService: SwitchService(desktop: WorkspaceDesktop(), store: fixture.store, codex: client))
+        await model.start()
+        // Startup sync repairs the saved copy; revoke it again to prove the
+        // refresh reads the live home rather than relying on that repair.
+        try JSONSerialization.data(withJSONObject: staleCredential).write(to: savedHome.appending(path: "auth.json"))
+        model.refreshWeeklyUsage(); await model.waitForWeeklyUsageRefresh()
+
+        #expect(model.usageStates[personal.id]?.displayedUsage?.remainingPercent == 89)
+        #expect(model.usageStates[workspace.id]?.displayedUsage?.remainingPercent == 42)
+        #expect(await client.activeReadCount == 1)
+        #expect(try Data(contentsOf: savedHome.appending(path: "auth.json"))
+            == Data(contentsOf: fixture.active.appending(path: "auth.json")))
+        #expect(model.accounts.first(where: { $0.id == personal.id })?.planType == "pro")
+    }
+
+    @MainActor @Test func activeProfileAppearsFirstWithoutChangingSavedOrder() async throws {
+        let fixture = try WorkspaceFixture()
+        defer { fixture.clean() }
+        let inactive = profile("workspace"), active = profile("personal")
+        let inactiveHome = try await fixture.store.createProfileDirectory(id: inactive.id)
+        try credential("workspace").write(to: inactiveHome.appending(path: "auth.json"))
+        try await fixture.store.addProfile(inactive)
+        try credential("personal").write(to: fixture.active.appending(path: "auth.json"))
+        try await fixture.store.importCurrentProfile(active)
+
+        let client = WorkspaceUsageClient()
+        let model = AccountController(store: fixture.store, codex: client,
+            switchService: SwitchService(desktop: WorkspaceDesktop(), store: fixture.store, codex: client))
+        await model.start()
+
+        #expect(model.displayAccounts.map(\.id) == [active.id, inactive.id])
+        #expect(model.snapshot.accounts.map(\.profile.id) == [active.id, inactive.id])
+        #expect(try await fixture.store.loadRegistry().accounts.map(\.id) == [inactive.id, active.id])
+    }
+
+    @MainActor @Test func unverifiedLiveCredentialIsNeverAttributedToSavedProfile() async throws {
+        let fixture = try WorkspaceFixture()
+        defer { fixture.clean() }
+        let personal = profile("personal")
+        try credential("personal").write(to: fixture.active.appending(path: "auth.json"))
+        try await fixture.store.importCurrentProfile(personal)
+        let savedHome = await fixture.store.profileHome(id: personal.id)
+        try credential("someone-else").write(to: fixture.active.appending(path: "auth.json"))
+
+        let client = LiveHomeUsageClient(activeHome: fixture.active, rejectedSavedHome: savedHome)
+        let model = AccountController(store: fixture.store, codex: client,
+            switchService: SwitchService(desktop: WorkspaceDesktop(), store: fixture.store, codex: client))
+        await model.start()
+        #expect(!model.activeIdentityConfirmed)
+        model.refreshWeeklyUsage(); await model.waitForWeeklyUsageRefresh()
+
+        #expect(model.usageStates[personal.id]?.displayedUsage == nil)
+        #expect(await client.activeReadCount == 0)
+    }
+
+    @Test func syncingActiveCredentialRejectsAnotherAccountWithoutChangingSavedCopy() async throws {
+        let fixture = try WorkspaceFixture()
+        defer { fixture.clean() }
+        let personal = profile("personal")
+        try credential("personal").write(to: fixture.active.appending(path: "auth.json"))
+        try await fixture.store.importCurrentProfile(personal)
+        let saved = await fixture.store.profileHome(id: personal.id).appending(path: "auth.json")
+        let original = try Data(contentsOf: saved)
+        try credential("another-account").write(to: fixture.active.appending(path: "auth.json"))
+
+        #expect(try await !fixture.store.syncActiveCredentialIfMatching(id: personal.id))
+        #expect(try Data(contentsOf: saved) == original)
+    }
+
+    @Test func registeringCurrentLoginUpdatesSavedPlanTier() async throws {
+        let fixture = try WorkspaceFixture()
+        defer { fixture.clean() }
+        var personal = profile("personal")
+        personal.planType = "prolite"
+        try credential("personal", plan: "prolite").write(to: fixture.active.appending(path: "auth.json"))
+        try await fixture.store.importCurrentProfile(personal)
+        try credential("personal", plan: "pro").write(to: fixture.active.appending(path: "auth.json"))
+
+        try await fixture.store.registerActiveIdentity(AccountIdentity(accountID: "personal",
+            email: "person@example.test", planType: "pro"))
+
+        let saved = await fixture.store.profileHome(id: personal.id).appending(path: "auth.json")
+        #expect(try Data(contentsOf: saved) == Data(contentsOf: fixture.active.appending(path: "auth.json")))
+        #expect(try await fixture.store.profile(id: personal.id).planType == "pro")
+    }
+
+    @Test func registeringCurrentLoginRejectsCredentialChangedAfterIdentityRead() async throws {
+        let fixture = try WorkspaceFixture()
+        defer { fixture.clean() }
+        let personal = profile("personal")
+        try credential("personal").write(to: fixture.active.appending(path: "auth.json"))
+        try await fixture.store.importCurrentProfile(personal)
+        let saved = await fixture.store.profileHome(id: personal.id).appending(path: "auth.json")
+        let original = try Data(contentsOf: saved)
+        try credential("another-account").write(to: fixture.active.appending(path: "auth.json"))
+
+        await #expect(throws: AccountStoreError.activeCredentialMismatch) {
+            try await fixture.store.registerActiveIdentity(AccountIdentity(accountID: "personal",
+                email: "person@example.test"))
+        }
+        #expect(try Data(contentsOf: saved) == original)
+        #expect(try await fixture.store.loadRegistry().activeAccountID == personal.id)
+    }
 }
 
 private struct WorkspaceFixture {
@@ -185,8 +319,46 @@ private actor WorkspaceUsageClient: AccountClient {
     }
 }
 
-func credential(_ account: String, plan: String = "pro") throws -> Data {
-    let claims: [String: Any] = ["email": "person@example.test",
+private actor LiveHomeUsageClient: AccountClient {
+    let activeHome: URL
+    let rejectedSavedHome: URL
+    private(set) var activeReadCount = 0
+
+    init(activeHome: URL, rejectedSavedHome: URL) {
+        self.activeHome = activeHome
+        self.rejectedSavedHome = rejectedSavedHome
+    }
+
+    func readIdentity(profileHome: URL) async throws -> AccountIdentity {
+        try #require(try CredentialIdentity.read(from: profileHome))
+    }
+
+    func login(profileHome: URL) async throws -> AccountIdentity {
+        throw CodexClientError.loginFailed("Fixture login is disabled.")
+    }
+
+    func readWeeklyUsage(profileHome: URL) async throws -> WeeklyUsage {
+        try #require(try await readAccountUsage(profileHome: profileHome).weekly)
+    }
+
+    func readAccountUsage(profileHome: URL) async throws -> AccountUsage {
+        if profileHome == rejectedSavedHome {
+            throw CodexClientError.remoteError(code: -32603, message: "401 token_revoked")
+        }
+        let percent: Int
+        if profileHome == activeHome {
+            activeReadCount += 1
+            percent = 89
+        } else {
+            percent = 42
+        }
+        return AccountUsage(weekly: WeeklyUsage(remainingPercent: percent,
+            resetsAt: Date(timeIntervalSince1970: 2_000_000_000)))
+    }
+}
+
+func credential(_ account: String, plan: String = "pro", email: String = "person@example.test") throws -> Data {
+    let claims: [String: Any] = ["email": email,
         "https://api.openai.com/auth": ["chatgpt_account_id": account, "chatgpt_plan_type": plan]]
     let payload = try JSONSerialization.data(withJSONObject: claims, options: [.sortedKeys]).base64EncodedString()
         .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")

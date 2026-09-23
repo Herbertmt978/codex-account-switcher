@@ -203,9 +203,19 @@ public actor AccountStore: AccountStoring {
     public func registerActiveIdentity(_ identity: AccountIdentity) throws {
         let current = try loadRegistry()
         if let profile = current.accounts.first(where: { identity.matches($0) }) {
-            try copyCredential(from: activeHomeURL.appending(path: "auth.json"),
-                               to: profileHome(id: profile.id).appending(path: "auth.json"))
+            let bytes = try readChecked(activeHomeURL.appending(path: "auth.json"))
+            guard let live = try? CredentialIdentity.decode(bytes),
+                  live.matches(profile) else { throw AccountStoreError.activeCredentialMismatch }
+            try secureAtomicWrite(bytes, to: profileHome(id: profile.id).appending(path: "auth.json"))
             try commitActiveAccountID(profile.id)
+            if let planType = identity.planType ?? live.planType {
+                var updated = try loadRegistry()
+                if let index = updated.accounts.firstIndex(where: { $0.id == profile.id }),
+                   updated.accounts[index].planType != planType {
+                    updated.accounts[index].planType = planType
+                    try saveRegistry(updated)
+                }
+            }
         } else {
             try importCurrentProfile(AccountProfile(id: UUID(), displayName: identity.suggestedDisplayName,
                 email: identity.email, accountID: identity.accountID, createdAt: Date(), lastUsedAt: Date(),
@@ -257,6 +267,33 @@ public actor AccountStore: AccountStoring {
             throw AccountStoreError.activeCredentialMissing
         }
         try copyCredential(from: source, to: profileHome(id: activeID).appending(path: "auth.json"))
+    }
+
+    /// Keep the active profile's saved credential current without ever copying
+    /// another account's credential into it after an external sign-in.
+    public func syncActiveCredentialIfMatching(id: UUID, planType: String? = nil) throws -> Bool {
+        var current = try loadRegistry()
+        guard current.activeAccountID == id,
+              let index = current.accounts.firstIndex(where: { $0.id == id }) else { return false }
+        let source = activeHomeURL.appending(path: "auth.json")
+        let bytes = try readChecked(source)
+        guard let identity = try? CredentialIdentity.decode(bytes),
+              identity.matches(current.accounts[index]) else { return false }
+
+        let destination = profileHome(id: id).appending(path: "auth.json")
+        try checkPath(destination)
+        var needsCopy = true
+        if fileManager.fileExists(atPath: destination.path) {
+            needsCopy = try readChecked(destination) != bytes
+        }
+        if needsCopy { try secureAtomicWrite(bytes, to: destination) }
+
+        if let latestPlan = planType ?? identity.planType,
+           current.accounts[index].planType != latestPlan {
+            current.accounts[index].planType = latestPlan
+            try saveRegistry(current)
+        }
+        return true
     }
 
     public func activateTargetCredential(id: UUID) throws {
