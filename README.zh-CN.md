@@ -25,8 +25,8 @@
 <p align="center">
   <a href="https://github.com/Herbertmt978/codex-account-switcher/releases/latest/download/Codex-Account-Switcher-macos-arm64.dmg"><b>免费下载 Mac 版</b></a> ·
   <a href="https://github.com/Herbertmt978/codex-account-switcher/releases/latest/download/Codex-Account-Switcher-windows-x64.exe"><b>免费下载 Windows 版</b></a> ·
-  <a href="https://liuzhao1225.github.io/codex-account-switcher/zh-CN/"><b>网站</b></a> ·
-  <a href="https://github.com/liuzhao1225/codex-account-switcher/discussions"><b>讨论区</b></a>
+  <a href="https://liuzhao1225.github.io/codex-account-switcher/zh-CN/"><b>原项目网站</b></a> ·
+  <a href="https://github.com/liuzhao1225/codex-account-switcher/discussions"><b>上游讨论区</b></a>
 </p>
 
 <p align="center">
@@ -62,7 +62,7 @@ OpenAI 官方账号切换功能当前适用于 ChatGPT 网页端，并且[尚未
 
 ## 下载
 
-[最新版本 v0.1.15](https://github.com/Herbertmt978/codex-account-switcher/releases/latest) 同时提供 macOS 和 Windows 安装包及 SHA-256 校验文件。
+[最新版本 v0.1.16](https://github.com/Herbertmt978/codex-account-switcher/releases/latest) 同时提供 macOS 和 Windows 安装包及 SHA-256 校验文件。
 
 | 平台 | 系统要求 | 下载与安装 |
 | --- | --- | --- |
@@ -92,11 +92,9 @@ macOS 使用菜单栏界面。本分支的应用使用临时签名，未经 Appl
 
 已经运行的终端进程会保留原有运行状态。启动新的 Codex CLI 进程即可使用刚刚选择的账号。
 
-## 征集反馈
+## 反馈与支持
 
-产品正在围绕普通桌面用户持续调整。欢迎参与公开讨论：[“Codex 账号切换器的哪个环节仍然显得太技术化？”](https://github.com/liuzhao1225/codex-account-switcher/discussions/2)，告诉我们问题出在下载应用、添加账号、识别当前账号，还是理解切换确认。
-
-也欢迎分享其他账号切换器的真实使用体验。请描述实际工作流和产生阻力的步骤，不要公开凭证、账号文件、电子邮箱或私人截图。
+[上游讨论区](https://github.com/liuzhao1225/codex-account-switcher/discussions)用于讨论原项目及两者共有的工作流程。本分支没有单独开放的公开 Issue 跟踪器或讨论区。如需修复仅发生于本分支的问题，请在本仓库提交范围明确的 Pull Request。请描述实际工作流程和出现问题的步骤；不要公开凭证、账号文件、电子邮箱或私人截图。
 
 ## 隐私与范围
 
@@ -170,9 +168,9 @@ prototype/                          早期浏览器视觉原型
 
 ## 参与贡献
 
-请使用 [GitHub Discussions](https://github.com/liuzhao1225/codex-account-switcher/discussions) 讨论工作流、产品想法和工具对比，使用 [GitHub Issues](https://github.com/liuzhao1225/codex-account-switcher/issues) 提交错误报告和范围明确的功能建议。发起 Pull Request 前请运行：
+关于原项目的想法，请使用[上游讨论区](https://github.com/liuzhao1225/codex-account-switcher/discussions)。本分支没有单独开放的公开 Issue 跟踪器；针对本分支的修复，请提交范围明确的 Pull Request。提交前请运行：
 
-网站公开记录项目的[隐私模式](https://liuzhao1225.github.io/codex-account-switcher/zh-CN/privacy/)、[官方联系渠道](https://liuzhao1225.github.io/codex-account-switcher/zh-CN/contact/)和[合理使用说明](https://liuzhao1225.github.io/codex-account-switcher/zh-CN/terms/)。请勿在公开支持渠道提交秘密信息或私人账号数据。
+原项目网站公开记录其[隐私模式](https://liuzhao1225.github.io/codex-account-switcher/zh-CN/privacy/)、[官方联系渠道](https://liuzhao1225.github.io/codex-account-switcher/zh-CN/contact/)和[合理使用说明](https://liuzhao1225.github.io/codex-account-switcher/zh-CN/terms/)。请勿在公开支持渠道提交秘密信息或私人账号数据。
 
 ```bash
 swift test
@@ -225,10 +223,4 @@ Codex Account Switcher 基于 [MIT License](LICENSE) 发布。
 
 ## 更新方式
 
-macOS 的“检查更新”会打开本分支的最新 GitHub 发布页面。请下载 DMG，退出 Switcher 后替换应用。本版本不支持自动检查或自动安装。
-
-本分支不发布或使用 Sparkle 更新源。若要提供 Developer ID 签名和 Apple 公证，需要分支维护者自己的 Apple Developer 凭据。
-
-保留机制、修复及仍存在的设计缺口见[全项目消融报告](docs/project-ablation-2026-09-05.md)。
-
-Windows 支持检查统一 Release 中的新版本，并打开下载页，由用户下载和替换 EXE。Windows 0.1.11 预览版用户需先手动升级一次到 0.1.12。
+更新与签名方式见[发布状态](#发布状态)和[发布管理](docs/platform-releases.md)。[全项目消融报告](docs/project-ablation-2026-09-05.md)记录了保留机制、修复及仍存在的设计缺口。
