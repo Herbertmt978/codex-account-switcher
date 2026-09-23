@@ -400,7 +400,7 @@ func open() async throws
 
 Use `NSRunningApplication` for the Codex Desktop bundle identifier and call `terminate()`.
 
-Codex Desktop can display a quit confirmation while work is active. Allow up to 30 seconds for its normal exit, including its history and settings flush. Never force-terminate Desktop. If the quit request is rejected or Desktop remains running, report a close-stage error before saving or replacing credentials. The user can finish or stop active tasks, close Desktop, and switch again. Cancellation also stops the wait.
+Codex Desktop can display a quit confirmation while work is active. On Windows, a close-window request can leave the Store app's background processes running, so focus its window and send its Ctrl+Q Quit shortcut. Verify the foreground process before sending keys. Allow up to 30 seconds for normal exit, including history and settings flush. Never force-terminate Desktop. If the quit request is rejected or Desktop remains running, report a close-stage error before saving or replacing credentials. The user can finish or stop active tasks, quit Desktop, and switch again. Cancellation also stops the wait.
 
 The switcher only observes the Desktop application's exit; it does not terminate CLI processes or claim to repair Codex's history database. Account RPCs read the login shell's `PATH` and shared `CODEX_CLI_PATH` setting. A bare command such as `codex` resolves through that PATH; an explicit absolute path must be executable. The child receives the same PATH so npm launchers can find Node. There is no switcher-specific override or automatic selection of another bundled CLI.
 
@@ -511,7 +511,7 @@ Closing Desktop comes before saving the active credential so Codex has a chance 
 
 ### 12.5 Save current credentials
 
-The registry must identify one active account. After Desktop exits, read the shared home’s current identity and match it against this profile before saving. An external login mismatch stops visibly and leaves saved profiles unchanged.
+The registry must identify one active account. At startup, if the shared home's identity matches exactly one saved profile other than the recorded active profile, update only the active registry reference. No credential is copied during this reconciliation. Ambiguous or unmatched identities remain unconfirmed and require Register Current Account. Before closing Desktop, read and confirm the shared home's identity against the selected profile and the target profile's saved identity against its metadata. A failed preflight leaves Desktop open and credentials untouched. After Desktop exits, recheck the shared home's identity in case shutdown changed it, then save. A later mismatch stops visibly and leaves saved profiles unchanged. After any failure following a successful close, reopen Desktop once the original credential is known to be in place. If credential restoration fails, leave Desktop closed and report both failures.
 
 ```text
 copy ~/.codex/auth.json

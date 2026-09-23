@@ -129,10 +129,13 @@ struct WorkspaceAccountTests {
         #expect(model.balances[workspace.id]?.credits?.balance == "250")
         #expect(model.usageStates[workspace.id]?.displayedUsage == nil)
         #expect(!model.balanceLines(for: personal.id).contains("Cached balances — awaiting refresh"))
-        await client.setFailure()
+        await client.setFailure(.remoteError(code: -32603,
+            message: "failed to fetch code rate limits: 401 Unauthorized; body contains token_revoked: invalidated auth token"))
         model.refreshWeeklyUsage(); await model.waitForWeeklyUsageRefresh()
         #expect(model.balances[personal.id]?.availableResets == 2)
-        #expect(model.balanceLines(for: workspace.id).first == "Cached balances — awaiting refresh")
+        #expect(model.balanceLines(for: workspace.id).first == "Cached balances — refresh failed")
+        let workspaceRow = try #require(model.snapshot.accounts.first { $0.profile.id == workspace.id })
+        #expect(workspaceRow.usageError == L10n.string("usage_auth_rejected", language: .english))
         let newStore = AccountStore(baseURL: fixture.base, activeHomeURL: fixture.active)
         let restarted = AccountController(store: newStore, codex: client, switchService: service)
         await restarted.start()
@@ -166,15 +169,15 @@ private struct WorkspaceIdentityReader: CodexIdentityReading {
 }
 
 private actor WorkspaceUsageClient: AccountClient {
-    var failure = false
-    func setFailure() { failure = true }
+    var failure: CodexClientError?
+    func setFailure(_ error: CodexClientError = .connectionClosed) { failure = error }
     func readIdentity(profileHome: URL) async throws -> AccountIdentity {
         try #require(try CredentialIdentity.read(from: profileHome))
     }
     func login(profileHome: URL) async throws -> AccountIdentity { try await readIdentity(profileHome: profileHome) }
     func readWeeklyUsage(profileHome: URL) async throws -> WeeklyUsage { throw CodexClientError.weeklyUsageUnavailable }
     func readAccountUsage(profileHome: URL) async throws -> AccountUsage {
-        if failure { throw CodexClientError.connectionClosed }
+        if let failure { throw failure }
         let isWorkspace = try CredentialIdentity.read(from: profileHome)?.accountID == "workspace"
         return AccountUsage(weekly: isWorkspace ? nil : WeeklyUsage(remainingPercent: 42, resetsAt: Date()),
             balances: AccountBalances(credits: .init(hasCredits: true, unlimited: false, balance: isWorkspace ? "250" : "100"),

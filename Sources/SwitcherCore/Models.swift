@@ -267,6 +267,12 @@ public enum CodexClientError: LocalizedError, Equatable, Sendable {
     case weeklyUsageUnavailable
     case loginFailed(String)
 
+    public var isAuthenticationRejected: Bool {
+        guard case let .remoteError(_, message) = self else { return false }
+        let normalized = message.lowercased()
+        return normalized.contains("token_revoked") || normalized.contains("invalidated auth token")
+    }
+
     public var errorDescription: String? {
         switch self {
         case .executableNotFound:

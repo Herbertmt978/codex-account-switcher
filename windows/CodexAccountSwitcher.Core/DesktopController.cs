@@ -1,12 +1,69 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 
 namespace CodexAccountSwitcher.Core;
 
 public sealed record DesktopInstallation(string Executable, string? AppUserModelId = null);
 
-public sealed class DesktopController(DesktopInstallation installation)
+public sealed class DesktopController(Func<CancellationToken, Task<DesktopInstallation>> discover)
 {
+    private const int ErrorInsufficientBuffer = 122;
+    private const int ErrorSuccess = 0;
+    private const uint InputKeyboard = 1;
+    private const uint KeyUp = 0x0002;
+    private const ushort ControlKey = 0x11;
+    private const ushort AltKey = 0x12;
+    private const ushort QKey = 0x51;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetApplicationUserModelId(IntPtr process, ref uint length, StringBuilder? appUserModelId);
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint count, KeyboardInput[] inputs, int size);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KeyboardInput
+    {
+        public uint Type;
+        public InputUnion Data;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        [FieldOffset(0)] public KeyData Keyboard;
+        [FieldOffset(0)] public MouseData Mouse;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KeyData
+    {
+        public ushort VirtualKey;
+        public ushort ScanCode;
+        public uint Flags;
+        public uint Time;
+        public IntPtr ExtraInfo;
+    }
+
+    // INPUT contains a union as wide as MOUSEINPUT, including its pointer-sized tail.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseData
+    {
+        public int X;
+        public int Y;
+        public uint MouseDataValue;
+        public uint Flags;
+        public uint Time;
+        public IntPtr ExtraInfo;
+    }
+
     public static async Task<DesktopInstallation> DiscoverAsync(string? explicitPath, CancellationToken ct = default)
     {
         if (!string.IsNullOrWhiteSpace(explicitPath))
@@ -48,14 +105,14 @@ public sealed class DesktopController(DesktopInstallation installation)
         throw new FileNotFoundException("Codex Desktop was not found. Install Codex Desktop before switching.");
     }
 
-    private List<Process> FindDesktopProcesses()
+    private static List<Process> FindDesktopProcesses(DesktopInstallation installation)
     {
         var result = new List<Process>();
         foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(installation.Executable)))
         {
             try
             {
-                if (!process.HasExited && string.Equals(process.MainModule?.FileName, installation.Executable, StringComparison.OrdinalIgnoreCase))
+                if (!process.HasExited && MatchesInstallation(process, installation))
                 { result.Add(process); continue; }
             }
             catch (System.ComponentModel.Win32Exception)
@@ -70,28 +127,102 @@ public sealed class DesktopController(DesktopInstallation installation)
         return result;
     }
 
+    internal static bool MatchesInstallation(Process process, DesktopInstallation installation)
+    {
+        // AUMIDs stay stable across Store package versions; a running app can retain its old install path after an update.
+        if (installation.AppUserModelId is { } expectedAppUserModelId &&
+            ReadApplicationUserModelId(process) is { } actualAppUserModelId)
+            return string.Equals(actualAppUserModelId, expectedAppUserModelId, StringComparison.OrdinalIgnoreCase);
+
+        return string.Equals(process.MainModule?.FileName, installation.Executable, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? ReadApplicationUserModelId(Process process)
+    {
+        uint length = 0;
+        var result = GetApplicationUserModelId(process.Handle, ref length, null);
+        if (result != ErrorInsufficientBuffer || length == 0) return null;
+
+        var value = new StringBuilder((int)length);
+        result = GetApplicationUserModelId(process.Handle, ref length, value);
+        return result == ErrorSuccess ? value.ToString() : null;
+    }
+
+    private static async Task RequestPackagedQuitAsync(Process process, CancellationToken cancellationToken)
+    {
+        var window = process.MainWindowHandle;
+        if (window == IntPtr.Zero)
+            throw new IOException("Codex Desktop has no visible window. Open it and try switching again.");
+        if (!SetForegroundWindow(window))
+        {
+            // Windows can deny a background caller foreground access. A neutral Alt key
+            // transition permits the normal foreground request without quitting another app.
+            var alt = new[] { Key(AltKey), Key(AltKey, KeyUp) };
+            if (SendInput((uint)alt.Length, alt, Marshal.SizeOf<KeyboardInput>()) != alt.Length)
+            {
+                SendInput(1, [Key(AltKey, KeyUp)], Marshal.SizeOf<KeyboardInput>());
+                throw new IOException("Windows could not focus Codex Desktop for Quit.");
+            }
+            if (!SetForegroundWindow(window))
+                throw new IOException("Codex Desktop could not be brought to the foreground for Quit.");
+        }
+        var focus = Stopwatch.StartNew();
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            GetWindowThreadProcessId(GetForegroundWindow(), out var foregroundProcessId);
+            if (foregroundProcessId == process.Id) break;
+            if (focus.Elapsed > TimeSpan.FromSeconds(2))
+                throw new IOException("Codex Desktop did not take focus for Quit.");
+            await Task.Delay(100, cancellationToken);
+        }
+        GetWindowThreadProcessId(GetForegroundWindow(), out var ownerBeforeQuit);
+        if (ownerBeforeQuit != process.Id)
+            throw new IOException("Codex Desktop lost focus before Quit could be requested.");
+        var inputs = new[] {
+            Key(ControlKey), Key(QKey), Key(QKey, KeyUp), Key(ControlKey, KeyUp)
+        };
+        if (SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<KeyboardInput>()) != inputs.Length)
+        {
+            SendInput(2, [Key(QKey, KeyUp), Key(ControlKey, KeyUp)], Marshal.SizeOf<KeyboardInput>());
+            throw new IOException("Windows could not send Codex Desktop its Quit shortcut.");
+        }
+    }
+
+    private static KeyboardInput Key(ushort virtualKey, uint flags = 0) => new() {
+        Type = InputKeyboard, Data = new InputUnion { Keyboard = new KeyData { VirtualKey = virtualKey, Flags = flags } }
+    };
+
     public async Task CloseAsync(CancellationToken cancellationToken)
     {
-        var initial = FindDesktopProcesses();
+        // Store package paths are versioned, so resolve the executable for every handoff.
+        var installation = await discover(cancellationToken);
+        var initial = FindDesktopProcesses(installation);
         try
         {
             if (initial.Count == 0) return;
-            var requested = false;
-            foreach (var process in initial)
+            var windows = initial.Where(process => !process.HasExited && process.MainWindowHandle != IntPtr.Zero).ToArray();
+            if (windows.Length == 0)
+                throw new IOException("Codex Desktop is running without a closable window. Open it and try switching again.");
+            if (installation.AppUserModelId != null)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!process.HasExited && process.MainWindowHandle != IntPtr.Zero)
+                // Closing the Store app's window can leave ChatGPT.exe running in the tray.
+                // Its Ctrl+Q accelerator requests a full, orderly application quit.
+                await RequestPackagedQuitAsync(windows[0], cancellationToken);
+            }
+            else
+            {
+                foreach (var process in windows)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (!process.CloseMainWindow()) throw new IOException("Codex Desktop rejected the normal close request.");
-                    requested = true;
                 }
             }
-            if (!requested) throw new IOException("Codex Desktop is running without a closable window. Quit it manually before switching.");
             var stopwatch = Stopwatch.StartNew();
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var remaining = FindDesktopProcesses();
+                var remaining = FindDesktopProcesses(installation);
                 var count = remaining.Count;
                 foreach (var process in remaining) process.Dispose();
                 if (count == 0) return;
@@ -106,6 +237,7 @@ public sealed class DesktopController(DesktopInstallation installation)
     public async Task OpenAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var installation = await discover(cancellationToken);
         var info = installation.AppUserModelId == null
             ? new ProcessStartInfo(installation.Executable) { UseShellExecute = true }
             : new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe"))
@@ -116,12 +248,12 @@ public sealed class DesktopController(DesktopInstallation installation)
         while (stopwatch.Elapsed < TimeSpan.FromSeconds(15))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var running = FindDesktopProcesses();
-            var count = running.Count;
+            var running = FindDesktopProcesses(installation);
+            var hasWindow = running.Any(process => !process.HasExited && process.MainWindowHandle != IntPtr.Zero);
             foreach (var process in running) process.Dispose();
-            if (count > 0) return;
+            if (hasWindow) return;
             await Task.Delay(250, cancellationToken);
         }
-        throw new IOException("Codex Desktop did not start within 15 seconds. Open it manually; the selected account remains active.");
+        throw new IOException("Codex Desktop did not open a window within 15 seconds. Open it manually; the selected account remains active.");
     }
 }

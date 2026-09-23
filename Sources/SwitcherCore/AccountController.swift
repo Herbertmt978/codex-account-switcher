@@ -2,7 +2,7 @@ import Foundation
 
 private enum UsageRefreshResult: Sendable {
     case success(UUID, AccountUsage)
-    case failure(UUID, String)
+    case failure(UUID, String, authenticationRejected: Bool)
 }
 
 @MainActor
@@ -55,7 +55,13 @@ open class AccountController {
     public func balanceLines(for id: UUID) -> [String] {
         guard let balance = balances[id] else { return [] }
         let lines = balance.lines(language: settings.language)
-        return cachedBalanceIDs.contains(id) ? [text("cached_balances")] + lines : lines
+        guard cachedBalanceIDs.contains(id) else { return lines }
+        let statusKey: String
+        switch usageStates[id] {
+        case .stale?, .unavailable?: statusKey = "cached_balances_refresh_failed"
+        default: statusKey = "cached_balances"
+        }
+        return [text(statusKey)] + lines
     }
 
     public func start() async {
@@ -153,7 +159,8 @@ open class AccountController {
                     do {
                         return .success(id, try await codex.readAccountUsage(profileHome: home))
                     } catch {
-                        return .failure(id, error.localizedDescription)
+                        return .failure(id, error.localizedDescription,
+                            authenticationRejected: (error as? CodexClientError)?.isAuthenticationRejected == true)
                     }
                 }
             }
@@ -170,13 +177,14 @@ open class AccountController {
                     } catch {
                         showError(error)
                     }
-                case let .failure(id, message):
+                case let .failure(id, message, authenticationRejected):
                     guard accounts.contains(where: { $0.id == id }) else { continue }
                     if balances[id] != nil { cachedBalanceIDs.insert(id) }
+                    let visibleMessage = authenticationRejected ? text("usage_auth_rejected") : message
                     if let cached = usageStates[id]?.displayedUsage {
-                        usageStates[id] = .stale(cached, message)
+                        usageStates[id] = .stale(cached, visibleMessage)
                     } else {
-                        usageStates[id] = .unavailable(message)
+                        usageStates[id] = .unavailable(visibleMessage)
                     }
                 }
             }
@@ -343,12 +351,26 @@ open class AccountController {
     }
 
     private func confirmActiveIdentity() async {
-        guard let activeID = activeAccountID,
-              let profile = accounts.first(where: { $0.id == activeID })
-        else { return }
+        guard await store.activeCredentialExists() else {
+            activeIdentityConfirmed = activeAccountID == nil
+            return
+        }
         do {
             let identity = try await codex.readIdentity(profileHome: await store.activeCodexHome())
-            activeIdentityConfirmed = identity.matches(profile)
+            if let activeID = activeAccountID,
+               let profile = accounts.first(where: { $0.id == activeID }),
+               identity.matches(profile) {
+                activeIdentityConfirmed = true
+                return
+            }
+            let matches = accounts.filter { identity.matches($0) }
+            guard matches.count == 1 else {
+                activeIdentityConfirmed = false
+                return
+            }
+            try await store.commitActiveAccountID(matches[0].id)
+            apply(try await store.loadRegistry())
+            activeIdentityConfirmed = true
         } catch {
             activeIdentityConfirmed = false
         }
