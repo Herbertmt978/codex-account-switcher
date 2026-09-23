@@ -60,7 +60,17 @@ struct AccountStoreTests {
         let fixture = try StoreFixture()
         defer { fixture.remove() }
         let profiles = try await prepareSwitchProfiles(fixture)
-        let bytes = Data(#"{"accountId":"target-id","email":"target@example.com","refresh":"new"}"#.utf8)
+        let claims = try JSONSerialization.data(withJSONObject: ["email": "target@example.com"])
+        let payload = claims.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+        let bytes = try JSONSerialization.data(withJSONObject: [
+            "accountId": "target-id",
+            "email": "target@example.com",
+            "refresh": "new",
+            "tokens": ["account_id": "target-id", "id_token": "fixture.\(payload).fixture"],
+        ], options: [.sortedKeys])
         try bytes.write(to: fixture.activeHome.appending(path: "auth.json"))
         try await fixture.store.registerActiveIdentity(AccountIdentity(accountID: "target-id", email: "target@example.com"))
         let current = try await fixture.store.loadRegistry()
