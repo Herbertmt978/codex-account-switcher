@@ -351,12 +351,26 @@ open class AccountController {
     }
 
     private func confirmActiveIdentity() async {
-        guard let activeID = activeAccountID,
-              let profile = accounts.first(where: { $0.id == activeID })
-        else { return }
+        guard await store.activeCredentialExists() else {
+            activeIdentityConfirmed = activeAccountID == nil
+            return
+        }
         do {
             let identity = try await codex.readIdentity(profileHome: await store.activeCodexHome())
-            activeIdentityConfirmed = identity.matches(profile)
+            if let activeID = activeAccountID,
+               let profile = accounts.first(where: { $0.id == activeID }),
+               identity.matches(profile) {
+                activeIdentityConfirmed = true
+                return
+            }
+            let matches = accounts.filter { identity.matches($0) }
+            guard matches.count == 1 else {
+                activeIdentityConfirmed = false
+                return
+            }
+            try await store.commitActiveAccountID(matches[0].id)
+            apply(try await store.loadRegistry())
+            activeIdentityConfirmed = true
         } catch {
             activeIdentityConfirmed = false
         }

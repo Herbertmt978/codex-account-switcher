@@ -52,6 +52,31 @@ public struct SwitchService: SwitchServicing {
             throw OperationError.stage(.saveCurrentCredential, error)
         }
 
+        // Reject stale or mismatched logins before touching Desktop. Recheck the
+        // active credential after it exits in case Desktop writes it on shutdown.
+        if let originalProfile {
+            do {
+                let identity = try await codex.readIdentity(profileHome: await store.activeCodexHome())
+                guard identity.matches(originalProfile) else {
+                    throw AccountStoreError.activeCredentialMismatch
+                }
+            } catch {
+                throw OperationError(
+                    stage: .saveCurrentCredential,
+                    titleKey: "switch_failed",
+                    messageKey: "active_unconfirmed",
+                    message: L10n.string("active_unconfirmed", language: .english),
+                    underlyingDescription: String(describing: error)
+                )
+            }
+        }
+        do {
+            let identity = try await codex.readIdentity(profileHome: await store.profileHome(id: targetID))
+            guard identity.matches(target) else { throw CodexClientError.identityUnavailable }
+        } catch {
+            throw targetIdentityFailure(error, restored: false)
+        }
+
         do {
             try await desktop.closeDesktop()
         } catch {
@@ -69,13 +94,13 @@ public struct SwitchService: SwitchServicing {
                 throw AccountStoreError.activeCredentialMismatch
             }
         } catch {
-            throw OperationError.stage(.saveCurrentCredential, error)
+            throw await reopeningOriginalDesktop(after: .stage(.saveCurrentCredential, error))
         }
 
         do {
             try await store.activateTargetCredential(id: targetID)
         } catch {
-            throw OperationError.stage(.activateTargetCredential, error)
+            throw await reopeningOriginalDesktop(after: .stage(.activateTargetCredential, error))
         }
 
         do {
@@ -119,7 +144,9 @@ public struct SwitchService: SwitchServicing {
             } else {
                 try await store.clearActiveCredential()
             }
-            return OperationError.stage(failedStage, originalError)
+            let failure = failedStage == .verifyTargetIdentity
+                ? targetIdentityFailure(originalError, restored: true) : OperationError.stage(failedStage, originalError)
+            return await reopeningOriginalDesktop(after: failure)
         } catch let restorationError {
             return OperationError(
                 stage: failedStage,
@@ -133,6 +160,32 @@ public struct SwitchService: SwitchServicing {
                 \(String(describing: originalError)); restoration: \
                 \(String(describing: restorationError))
                 """
+            )
+        }
+    }
+
+    private func targetIdentityFailure(_ error: any Error, restored: Bool) -> OperationError {
+        let key = restored ? "target_sign_in_unverified" : "target_sign_in_preflight_failed"
+        return OperationError(
+            stage: .verifyTargetIdentity,
+            titleKey: "switch_failed",
+            messageKey: key,
+            message: L10n.string(key, language: .english),
+            underlyingDescription: String(describing: error)
+        )
+    }
+
+    private func reopeningOriginalDesktop(after failure: OperationError) async -> OperationError {
+        do {
+            try await desktop.reopenDesktop()
+            return failure
+        } catch {
+            return OperationError(
+                stage: failure.stage,
+                titleKey: failure.titleKey,
+                messageKey: nil,
+                message: "\(failure.message) Reopening Codex Desktop also failed: \(error.localizedDescription)",
+                underlyingDescription: "\(failure.underlyingDescription ?? failure.message); reopening: \(error)"
             )
         }
     }

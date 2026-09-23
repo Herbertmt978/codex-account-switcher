@@ -4,6 +4,26 @@ import Testing
 
 
 struct SwitchServiceTests {
+    @Test func rejectedTargetStopsBeforeClosingDesktop() async {
+        let fixture = SwitchFixture(failure: nil, invalidTargetPreflight: true)
+
+        await expectFailure(fixture, stage: .verifyTargetIdentity)
+
+        #expect(await fixture.recorder.snapshot().isEmpty)
+        #expect(await fixture.store.credentialOwner() == fixture.original.id)
+        #expect(await fixture.store.activeAccountID() == fixture.original.id)
+    }
+
+    @Test func activeAccountMismatchStopsBeforeClosingDesktop() async {
+        let fixture = SwitchFixture(failure: nil, invalidActivePreflight: true)
+
+        await expectFailure(fixture, stage: .saveCurrentCredential)
+
+        #expect(await fixture.recorder.snapshot().isEmpty)
+        #expect(await fixture.store.credentialOwner() == fixture.original.id)
+        #expect(await fixture.store.activeAccountID() == fixture.original.id)
+    }
+
     @Test func quitFailureLeavesBothAccountsUntouched() async {
         let fixture = SwitchFixture(failure: .closeDesktop)
         await expectFailure(fixture, stage: .closeDesktop)
@@ -37,7 +57,11 @@ struct SwitchServiceTests {
                 Issue.record("Expected OperationError, got \(error)")
             }
             let index = SwitchStage.allCases.firstIndex(of: stage)!
-            #expect(await fixture.recorder.snapshot() == Array(SwitchStage.allCases[...index]))
+            var expected = Array(SwitchStage.allCases[...index])
+            if stage != .closeDesktop && stage != .reopenDesktop {
+                expected.append(.reopenDesktop)
+            }
+            #expect(await fixture.recorder.snapshot() == expected)
         }
     }
 
@@ -49,6 +73,7 @@ struct SwitchServiceTests {
         #expect(await fixture.store.credentialOwner() == fixture.original.id)
         #expect(await fixture.store.activeAccountID() == fixture.original.id)
         #expect(await fixture.store.restoredProfileIDs() == [fixture.original.id])
+        #expect(await fixture.recorder.snapshot().last == .reopenDesktop)
     }
 
     @Test func restoresOriginalCredentialWhenRegistryCommitFails() async {
@@ -59,6 +84,7 @@ struct SwitchServiceTests {
         #expect(await fixture.store.credentialOwner() == fixture.original.id)
         #expect(await fixture.store.activeAccountID() == fixture.original.id)
         #expect(await fixture.store.restoredProfileIDs() == [fixture.original.id])
+        #expect(await fixture.recorder.snapshot().last == .reopenDesktop)
     }
 
     @Test func retryAfterVerificationFailureCannotOverwriteOriginalProfile() async {
@@ -81,6 +107,7 @@ struct SwitchServiceTests {
         #expect(await fixture.store.credentialOwner() == fixture.original.id)
         #expect(await fixture.store.activeAccountID() == fixture.original.id)
         #expect(await fixture.store.restoredProfileIDs().isEmpty)
+        #expect(await fixture.recorder.snapshot().last == .reopenDesktop)
     }
 
     @Test func reopenFailureAfterCommitKeepsTargetAccount() async {
@@ -104,6 +131,7 @@ struct SwitchServiceTests {
             #expect(error.message.contains("Injected verifyTargetIdentity failure"))
             #expect(error.message.contains("Injected credential restoration failure"))
             #expect(error.underlyingDescription?.contains("restoration:") == true)
+            #expect(await fixture.recorder.snapshot().last == .verifyTargetIdentity)
         } catch {
             Issue.record("Expected OperationError, got \(error)")
         }
@@ -241,8 +269,15 @@ private struct FakeCodex: CodexIdentityReading {
     let failure: SwitchStage?
     let store: FakeStore
     let target: AccountProfile
+    let invalidTargetPreflight: Bool
+    let invalidActivePreflight: Bool
     func readIdentity(profileHome: URL) async throws -> AccountIdentity {
+        if profileHome.path == "/tmp/target" {
+            if invalidTargetPreflight { throw InjectedFailure(stage: .verifyTargetIdentity) }
+            return AccountIdentity(accountID: target.accountID, email: target.email)
+        }
         if await store.credentialOwner() == store.original.id {
+            if invalidActivePreflight { throw InjectedFailure(stage: .saveCurrentCredential) }
             return AccountIdentity(accountID: store.original.accountID, email: store.original.email)
         }
         await recorder.append(.verifyTargetIdentity)
@@ -258,7 +293,8 @@ private struct SwitchFixture {
     let store: FakeStore
     let service: SwitchService
 
-    init(failure: SwitchStage?, restoreFails: Bool = false) {
+    init(failure: SwitchStage?, restoreFails: Bool = false,
+         invalidTargetPreflight: Bool = false, invalidActivePreflight: Bool = false) {
         let original = AccountProfile(
             id: UUID(), displayName: "Original", email: "original@example.com",
             accountID: "original-id", createdAt: Date(), lastUsedAt: nil
@@ -280,7 +316,8 @@ private struct SwitchFixture {
         service = SwitchService(
             desktop: FakeDesktop(recorder: recorder, failure: failure),
             store: store,
-            codex: FakeCodex(recorder: recorder, failure: failure, store: store, target: target)
+            codex: FakeCodex(recorder: recorder, failure: failure, store: store, target: target,
+                invalidTargetPreflight: invalidTargetPreflight, invalidActivePreflight: invalidActivePreflight)
         )
     }
 }

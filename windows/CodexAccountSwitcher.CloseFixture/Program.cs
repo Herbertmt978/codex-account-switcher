@@ -8,7 +8,7 @@ internal static class Program
     {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new Form
+        Application.Run(new QuitFixtureForm
         {
             Text = "Codex package update test fixture",
             ClientSize = new Size(360, 90),
@@ -16,5 +16,18 @@ internal static class Program
             StartPosition = FormStartPosition.CenterScreen,
             ShowInTaskbar = true
         });
+    }
+}
+
+internal sealed class QuitFixtureForm : Form
+{
+    protected override bool ProcessCmdKey(ref Message message, Keys keyData)
+    {
+        if (keyData == (Keys.Control | Keys.Q))
+        {
+            Application.Exit();
+            return true;
+        }
+        return base.ProcessCmdKey(ref message, keyData);
     }
 }

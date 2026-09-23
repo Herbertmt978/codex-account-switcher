@@ -9,6 +9,7 @@ import SwitcherPlatform
 public protocol AccountStoring: Sendable {
     func loadRegistry() async throws -> AccountRegistry
     func profile(id: UUID) async throws -> AccountProfile
+    func profileHome(id: UUID) async -> URL
     func activeCredentialExists() async -> Bool
     func clearActiveCredential() async throws
     func activeCodexHome() async -> URL

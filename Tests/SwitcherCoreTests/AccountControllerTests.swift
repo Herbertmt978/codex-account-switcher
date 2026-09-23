@@ -82,6 +82,56 @@ struct AccountControllerTests {
         #expect(fixture.model.activeAccountID == id)
     }
 
+    @Test func startupSelectsTheUniqueSavedProfileMatchingAnExternalLogin() async throws {
+        let fixture = try ControllerFixture()
+        defer { fixture.clean() }
+        try fixture.writeActiveCredential()
+        let matching = AccountProfile(id: UUID(), displayName: "Current", email: "demo@example.test",
+            accountID: "demo-account", createdAt: Date())
+        let selected = AccountProfile(id: UUID(), displayName: "Previously selected", email: "other@example.test",
+            accountID: "other-account", createdAt: Date())
+        for profile in [matching, selected] {
+            let home = try await fixture.store.createProfileDirectory(id: profile.id)
+            try Data("saved-\(profile.displayName)".utf8).write(to: home.appendingPathComponent("auth.json"))
+            try await fixture.store.addProfile(profile)
+        }
+        try await fixture.store.commitActiveAccountID(selected.id)
+
+        await fixture.model.start()
+
+        #expect(fixture.model.activeAccountID == matching.id)
+        #expect(fixture.model.activeIdentityConfirmed)
+        #expect(try await fixture.store.loadRegistry().activeAccountID == matching.id)
+        #expect(try String(contentsOf: fixture.active.appendingPathComponent("auth.json"), encoding: .utf8)
+            == "fixture-secret-token")
+        #expect(try String(contentsOf: await fixture.store.profileHome(id: matching.id).appendingPathComponent("auth.json"), encoding: .utf8)
+            == "saved-Current")
+    }
+
+    @Test func startupLeavesAmbiguousSavedProfilesUntouched() async throws {
+        let fixture = try ControllerFixture()
+        defer { fixture.clean() }
+        try fixture.writeActiveCredential()
+        let first = AccountProfile(id: UUID(), displayName: "First", email: "demo@example.test",
+            accountID: "demo-account", createdAt: Date())
+        let second = AccountProfile(id: UUID(), displayName: "Second", email: "demo@example.test",
+            accountID: "demo-account", createdAt: Date())
+        let prior = AccountProfile(id: UUID(), displayName: "Prior", email: "other@example.test",
+            accountID: "other-account", createdAt: Date())
+        let storeRoot = fixture.root.appendingPathComponent("store")
+        try FileManager.default.createDirectory(at: storeRoot, withIntermediateDirectories: true)
+        let registry = AccountRegistry(activeAccountID: prior.id, accounts: [first, second, prior])
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(registry).write(to: storeRoot.appendingPathComponent("accounts.json"))
+
+        await fixture.model.start()
+
+        #expect(fixture.model.activeAccountID == prior.id)
+        #expect(!fixture.model.activeIdentityConfirmed)
+        #expect(try await fixture.store.loadRegistry().activeAccountID == prior.id)
+    }
+
     @Test func refreshKeepsLastGoodUsageWhenTheServerFails() async throws {
         let fixture = try ControllerFixture()
         defer { fixture.clean() }

@@ -18,11 +18,11 @@ The app opens a centered Windows window with a standard title bar, minimize and 
 
 ## Shared logic and native boundaries
 
-`Sources/SwitcherCore` owns the ordered handoff: normal Desktop close, verify/save current login, activate target, verify target, commit selection and reopen Desktop. A verification/commit failure performs the same bounded recovery on both platforms.
+`Sources/SwitcherCore` owns the ordered handoff: verify the current and target saved identities, request Desktop Quit, verify/save the current login, activate and verify the target, commit selection and reopen Desktop. A verification/commit failure performs the same bounded recovery on both platforms.
 
-macOS calls the module directly through its SwiftUI model. Windows starts a bundled `SwitcherHost.exe` child and receives presentation snapshots. Credentials never cross that UI protocol. Windows adapters implement file ACLs/atomic replacement, Desktop discovery and normal close/open, browser opening, tray and startup integration.
+macOS calls the module directly through its SwiftUI model. Windows starts a bundled `SwitcherHost.exe` child and receives presentation snapshots. Credentials never cross that UI protocol. Windows adapters implement file ACLs/atomic replacement, Desktop discovery and normal Quit/open, browser opening, tray and startup integration.
 
-Desktop is located from the `OpenAI.Codex` Store manifest (its executable can be `ChatGPT.exe`) and common per-user installation paths. Matching uses the full executable path. Existing CLI sessions are not closed. If Desktop cannot exit normally within 30 seconds, switching stops before credentials are changed.
+Desktop is located from the `OpenAI.Codex` Store manifest (its executable can be `ChatGPT.exe`) and common per-user installation paths. Store processes match by stable app identity across versioned package paths, with an exact executable-path fallback. For the Store app, the switcher focuses its window and sends Codex's Ctrl+Q Quit shortcut; closing only its window can leave background processes running. Existing CLI sessions are not closed. If Desktop cannot exit normally within 30 seconds, switching stops before credentials are changed.
 
 ## Storage
 

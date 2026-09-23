@@ -45,7 +45,15 @@ internal static class DesktopCloseChecks
             Require(FindFixture(newExecutable) is null, "The refreshed package path should close the updated fixture.");
             Require(discoveryCount == 4, "Each open and close operation should discover the current package path.");
 
-            Console.WriteLine("PASS: a versioned Store-path update is discovered for each open and close; normal window close exits the matching process.");
+            // Packaged Codex uses Ctrl+Q to quit instead of merely closing its window.
+            await controller.OpenAsync(CancellationToken.None);
+            await WaitForWindowAsync(newExecutable);
+            var packagedController = new DesktopController(_ => Task.FromResult(
+                new DesktopInstallation(newExecutable, "fixture-package!App")));
+            await packagedController.CloseAsync(CancellationToken.None);
+            Require(FindFixture(newExecutable) is null, "The packaged fixture should quit through Ctrl+Q.");
+
+            Console.WriteLine("PASS: updated Store paths, normal window close and packaged Ctrl+Q quit exit the matching fixture.");
             return 0;
         }
         catch (Exception ex)
