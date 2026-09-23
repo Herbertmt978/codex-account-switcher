@@ -31,8 +31,6 @@
   English · <a href="README.zh-CN.md">中文</a>
 </p>
 
-![Native macOS Codex Account Switcher showing three fictional Codex profiles, usage, and account switching from the menu bar](assets/codex-account-switcher-hero.png)
-
 <p align="center">
   <a href="#download">Installation</a> &nbsp; | &nbsp;
   <a href="#features">Features</a> &nbsp; | &nbsp;
