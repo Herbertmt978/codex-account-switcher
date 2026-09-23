@@ -1,5 +1,3 @@
-> Herbertmt978 fork: separate personal/workspace profiles, per-account credits and current available resets. [Download v0.1.16 for Windows or Mac](https://github.com/Herbertmt978/codex-account-switcher/releases/latest). The Mac build is ad-hoc signed and not Apple-notarised; see [Mac installation](docs/platform-releases.md#mac-installation). Original author attribution is preserved below.
-
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/account-switcher-logo-white.png">
@@ -15,18 +13,18 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Herbertmt978/codex-account-switcher/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Herbertmt978/codex-account-switcher?sort=semver&label=release&color=2563eb"></a>
-  <img alt="macOS 14 or later" src="https://img.shields.io/badge/macOS-14%2B-171513?logo=apple&logoColor=white">
-  <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-arm64-171513">
-  <img alt="Windows 10/11 x64" src="https://img.shields.io/badge/Windows-10%2F11%20x64-171513">
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-171513"></a>
+  <a href="https://github.com/Herbertmt978/codex-account-switcher/releases"><img alt="Release" src="https://img.shields.io/github/v/release/Herbertmt978/codex-account-switcher?sort=semver&label=Release&color=0EA5E9"></a>
+  <img alt="macOS 14 or later" src="https://img.shields.io/badge/macOS-14%2B-17243F?logo=apple&logoColor=white">
+  <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-arm64-17243F">
+  <img alt="Windows 10/11 x64" src="https://img.shields.io/badge/Windows-10%2F11%20x64-17243F">
+  <a href="LICENSE"><img alt="Licence: MIT" src="https://img.shields.io/badge/Licence-MIT-0F766E"></a>
 </p>
 
 <p align="center">
   <a href="https://github.com/Herbertmt978/codex-account-switcher/releases/latest/download/Codex-Account-Switcher-macos-arm64.dmg"><b>Download free for Mac</b></a> ·
   <a href="https://github.com/Herbertmt978/codex-account-switcher/releases/latest/download/Codex-Account-Switcher-windows-x64.exe"><b>Download free for Windows</b></a> ·
-  <a href="https://liuzhao1225.github.io/codex-account-switcher/"><b>Website</b></a> ·
-  <a href="https://github.com/liuzhao1225/codex-account-switcher/discussions"><b>Discussions</b></a>
+  <a href="https://liuzhao1225.github.io/codex-account-switcher/"><b>Original project website</b></a> ·
+  <a href="https://github.com/liuzhao1225/codex-account-switcher/discussions"><b>Upstream discussions</b></a>
 </p>
 
 <p align="center">
@@ -36,9 +34,10 @@
 ![Native macOS Codex Account Switcher showing three fictional Codex profiles, usage, and account switching from the menu bar](assets/codex-account-switcher-hero.png)
 
 <p align="center">
-  <a href="#download">Installation</a> &nbsp; / &nbsp;
-  <a href="#features">Features</a> &nbsp; / &nbsp;
-  <a href="#frequently-asked-questions">FAQ</a> &nbsp; / &nbsp;
+  <a href="#download">Installation</a> &nbsp; | &nbsp;
+  <a href="#features">Features</a> &nbsp; | &nbsp;
+  <a href="#privacy-and-scope">Privacy</a> &nbsp; | &nbsp;
+  <a href="#frequently-asked-questions">FAQ</a> &nbsp; | &nbsp;
   <a href="#development">Development</a>
 </p>
 
@@ -47,6 +46,14 @@
 Codex Account Switcher is a free, open-source app for managing multiple authorized Codex accounts on macOS and Windows. Add personal, work, or client accounts through the browser once, then choose the account you need in the app. The everyday workflow requires no coding knowledge, Terminal commands, copied tokens, or config-file editing.
 
 After you select and confirm an account, the app closes Codex Desktop, completes the account handoff, verifies the selected identity, and reopens Desktop. Saved account data stays on your computer. The app runs without its own proxy, traffic router, cloud account service, or automatic account rotation.
+
+> [!NOTE]
+> This is the Herbertmt978 fork. It adds separate personal and workspace profiles,
+> per-account credits and available reset information. Download its
+> [macOS and Windows packages](https://github.com/Herbertmt978/codex-account-switcher/releases/latest).
+> The Mac build is ad-hoc signed and not Apple-notarised; read the
+> [Mac installation guidance](docs/platform-releases.md#mac-installation).
+> Original project and author attribution follows below.
 
 ## Official project identity
 
@@ -92,11 +99,14 @@ Launch the app, add accounts through browser sign-in, then select and confirm a 
 
 Existing terminal processes keep their current runtime state. Start a new Codex CLI process to use the newly selected account.
 
-## Feedback wanted
+## Feedback and support
 
-The product is being shaped for ordinary desktop users. Join the public discussion, [“What still feels too technical in a Codex account switcher for Mac?”](https://github.com/liuzhao1225/codex-account-switcher/discussions/2), and tell us whether the friction is downloading the app, adding an account, seeing the active account, or understanding the switch confirmation.
-
-Comparisons with other account switchers are welcome. Please describe the workflow you actually use and the step that creates friction; never share credentials, account files, email addresses, or private screenshots.
+The [upstream discussions](https://github.com/liuzhao1225/codex-account-switcher/discussions)
+cover the original product and shared workflows. This fork has no separate
+public issue tracker or discussion forum. For a fix specific to this fork, open
+a focused pull request here. Describe the workflow and the step that causes
+trouble; never share credentials, account files, email addresses or private
+screenshots.
 
 ## Privacy and scope
 
@@ -170,7 +180,10 @@ prototype/                          Early browser-based visual prototype
 
 ## Contributing
 
-Use [GitHub Discussions](https://github.com/liuzhao1225/codex-account-switcher/discussions) for workflow questions, product ideas, and comparisons. Use [GitHub Issues](https://github.com/liuzhao1225/codex-account-switcher/issues) for bug reports and focused feature proposals. Run the following checks before opening a pull request:
+Use [upstream discussions](https://github.com/liuzhao1225/codex-account-switcher/discussions)
+for ideas about the original product. This fork has no separate public issue
+tracker; open a focused pull request for a fork-specific fix. Run the following
+checks before opening a pull request:
 
 The website records the project's [privacy model](https://liuzhao1225.github.io/codex-account-switcher/privacy/), [official contact channels](https://liuzhao1225.github.io/codex-account-switcher/contact/), and [responsible-use terms](https://liuzhao1225.github.io/codex-account-switcher/terms/). Do not post secrets or private account data in public support channels.
 
@@ -225,10 +238,7 @@ Codex Account Switcher is released under the [MIT License](LICENSE).
 
 ## Updates
 
-On macOS, Check for Updates opens this fork's latest GitHub release. Download the new DMG, quit Switcher and replace the app. Automatic checking and installation are unavailable in this distribution.
-
-The fork does not publish or consume a Sparkle feed. Developer ID signing and Apple notarisation can be added when the fork owner supplies their own Apple Developer credentials.
-
-See the [whole-project ablation report](docs/project-ablation-2026-09-05.md) for retained mechanisms, repairs, and open design gaps.
-
-Windows checks the unified Release for a new version and opens its download page; download and replace the EXE manually. Windows 0.1.11 preview users need one manual upgrade to 0.1.12.
+For update and signing details, see [Release status](#release-status) and
+[release management](docs/platform-releases.md). The
+[whole-project ablation report](docs/project-ablation-2026-09-05.md) records
+retained mechanisms, repairs and open design gaps.
