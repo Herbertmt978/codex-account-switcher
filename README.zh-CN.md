@@ -33,8 +33,6 @@
   <a href="README.md">English</a> · 中文
 </p>
 
-![原生 macOS Codex Account Switcher 在菜单栏中展示三个虚构 Codex 账号、用量和账号切换功能](assets/codex-account-switcher-hero.zh-CN.png)
-
 <p align="center">
   <a href="#下载">安装说明</a> &nbsp; / &nbsp;
   <a href="#功能">功能</a> &nbsp; / &nbsp;
