@@ -265,10 +265,11 @@ The stage is held in memory only for progress and error messages.
 Lookup order:
 
 1. test-only explicit URL;
-2. the login shell's shared `CODEX_CLI_PATH`, resolved through its `PATH` when it is a command name;
-3. the login shell's `codex` command when no shared override is set.
+2. an explicit shared `CODEX_CLI_PATH`, resolved directly when it is a path or through `PATH` when it is a command name;
+3. on Windows, the newest Codex CLI installed by Codex Desktop when no shared override is set;
+4. the default `codex` command on `PATH` when no shared override is set and no installed Desktop CLI has been selected.
 
-The runtime version is never pinned. Each operation resolves the current system command. The same login-shell PATH is passed to app-server so npm launchers can resolve Node. A missing command or invalid explicit path is an error; the switcher does not silently start another bundled version.
+The runtime version is never pinned. Each operation resolves the current executable. Windows follows Codex Desktop updates in `%LOCALAPPDATA%\OpenAI\Codex\bin` by default and excludes temporary `.staging-*` directories; an explicit `CODEX_CLI_PATH` remains authoritative. The same PATH is passed to app-server so npm launchers can resolve Node. A missing command or invalid explicit override is an error.
 
 If not found, show one direct error:
 
@@ -402,7 +403,7 @@ Use `NSRunningApplication` for the Codex Desktop bundle identifier and call `ter
 
 Codex Desktop can display a quit confirmation while work is active. On Windows, a close-window request can leave the Store app's background processes running, so focus its window and send its Ctrl+Q Quit shortcut. Verify the foreground process before sending keys. Allow up to 30 seconds for normal exit, including history and settings flush. Never force-terminate Desktop. If the quit request is rejected or Desktop remains running, report a close-stage error before saving or replacing credentials. The user can finish or stop active tasks, quit Desktop, and switch again. Cancellation also stops the wait.
 
-The switcher only observes the Desktop application's exit; it does not terminate CLI processes or claim to repair Codex's history database. Account RPCs read the login shell's `PATH` and shared `CODEX_CLI_PATH` setting. A bare command such as `codex` resolves through that PATH; an explicit absolute path must be executable. The child receives the same PATH so npm launchers can find Node. There is no switcher-specific override or automatic selection of another bundled CLI.
+The switcher only observes the Desktop application's exit; it does not terminate CLI processes or claim to repair Codex's history database. Account RPCs follow the [Codex executable discovery contract](#8-codex-executable-discovery), and the child receives the same PATH so npm launchers can find Node. There is no switcher-specific override.
 
 If Desktop is not running, `close()` succeeds immediately.
 

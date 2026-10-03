@@ -349,7 +349,8 @@ public struct CodexExecutableLocator: Sendable {
             return explicitURL
         }
         let command = environment["CODEX_CLI_PATH"]?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let executable = command.flatMap { $0.isEmpty ? nil : $0 } ?? "codex"
+        let explicitCommand = command.flatMap { $0.isEmpty ? nil : $0 }
+        let executable = explicitCommand ?? "codex"
         #if os(Windows)
         if executable.contains("/") || executable.contains("\\") {
             guard URL(fileURLWithPath: executable).path == executable.replacingOccurrences(of: "\\", with: "/")
@@ -359,23 +360,13 @@ public struct CodexExecutableLocator: Sendable {
             guard isExecutable(executable) else { throw CodexClientError.executableNotFound }
             return URL(fileURLWithPath: executable)
         }
+        if explicitCommand == nil, let installed = installedCodexExecutable(in: environment) {
+            return installed
+        }
         for directory in (environment["Path"] ?? environment["PATH"] ?? "").split(separator: ";") {
             let candidate = URL(fileURLWithPath: String(directory)).appendingPathComponent(
                 executable.lowercased().hasSuffix(".exe") ? executable : executable + ".exe")
             if isExecutable(candidate.path) { return candidate }
-        }
-        if let local = environment["LOCALAPPDATA"] {
-            let bin = URL(fileURLWithPath: local).appendingPathComponent("OpenAI/Codex/bin")
-            let versions = (try? FileManager.default.contentsOfDirectory(at: bin,
-                includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-            for version in versions.sorted(by: {
-                let left = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                let right = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                return left > right
-            }) {
-                let candidate = version.appendingPathComponent("codex.exe")
-                if isExecutable(candidate.path) { return candidate }
-            }
         }
         #else
         if executable.contains("/") {
@@ -394,6 +385,22 @@ public struct CodexExecutableLocator: Sendable {
         }
         #endif
         throw CodexClientError.executableNotFound
+    }
+
+    private func installedCodexExecutable(in environment: [String: String]) -> URL? {
+        guard let local = environment["LOCALAPPDATA"] else { return nil }
+        let bin = URL(fileURLWithPath: local).appendingPathComponent("OpenAI/Codex/bin")
+        let versions = (try? FileManager.default.contentsOfDirectory(at: bin,
+            includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for version in versions.filter({ !$0.lastPathComponent.hasPrefix(".staging-") }).sorted(by: {
+            let left = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let right = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return left > right
+        }) {
+            let candidate = version.appendingPathComponent("codex.exe")
+            if isExecutable(candidate.path) { return candidate }
+        }
+        return nil
     }
 
     public func launchConfiguration(
@@ -457,7 +464,7 @@ public struct CodexClient: AccountClient {
     private let openBrowser: @Sendable (URL) async throws -> Void
 
     public init(locator: CodexExecutableLocator = .init(), requestTimeout: Duration = .seconds(20),
-                clientVersion: String = "0.1.16",
+                clientVersion: String = "0.1.17",
                 openBrowser: @escaping @Sendable (URL) async throws -> Void = CodexClient.defaultOpenBrowser) {
         self.locator = locator
         self.requestTimeout = requestTimeout

@@ -118,6 +118,8 @@ Assert that the client does not retry, makes one rate-limit request per read, an
 Install fish to enable the fish regression check (it is explicitly skipped when fish is unavailable).
 Each shell covers unset and empty `CODEX_CLI_PATH`, shell-local command and absolute-path overrides,
 invalid overrides, startup output, paths containing spaces, and PATH inheritance by the launched child.
+The Windows suite also checks that an installed Codex Desktop CLI takes precedence over an older PATH command when `CODEX_CLI_PATH` is unset or empty, that default lookup falls back to PATH when Desktop is unavailable, and that explicit command overrides work or report an error.
+Incomplete `.staging-*` installs must not override a finalized Desktop CLI or prevent the PATH fallback when no finalized CLI is available.
 
 ## 5. UI tests
 

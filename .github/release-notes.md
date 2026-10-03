@@ -1,8 +1,9 @@
-The active account is listed first. Its usage is read from the verified live Codex login, and its saved credential is updated at startup and during periodic refreshes. Saved credentials for other accounts remain separate. The switcher checks account identity before updating a saved credential.
+On Windows, the switcher now follows the Codex CLI installed by Codex Desktop when no `CODEX_CLI_PATH` override is set, so account and usage refreshes use the current Desktop runtime even when an older CLI appears earlier on `PATH`.
+Automatic discovery skips temporary Desktop staging directories.
 
-Personal account rows now show the subscription tier reported by Codex, including Free, Pro ×5 and Pro ×20. Subscription renewal dates are not available from Codex and are not shown.
+A deliberate `CODEX_CLI_PATH` override takes precedence. A missing override command now reports an error rather than silently selecting the installed Desktop runtime.
 
-This release also refreshes usage after a completed switch. The Windows account handoff has passed isolated checks; this release does not claim a new live handoff test. Installing the update does not switch accounts or close Codex.
+Installing the update does not switch accounts or close Codex.
 
 Download the Windows x64 EXE or the macOS 14+ Apple Silicon DMG from Assets. Both include SHA-256 checksum files. Quit the existing switcher from its tray/menu-bar menu before replacing it; saved profiles remain in their existing data directory.
 
