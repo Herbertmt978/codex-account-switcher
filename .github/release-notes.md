@@ -1,4 +1,5 @@
 On Windows, the switcher now follows the Codex CLI installed by Codex Desktop when no `CODEX_CLI_PATH` override is set, so account and usage refreshes use the current Desktop runtime even when an older CLI appears earlier on `PATH`.
+Automatic discovery skips temporary Desktop staging directories.
 
 A deliberate `CODEX_CLI_PATH` override takes precedence. A missing override command now reports an error rather than silently selecting the installed Desktop runtime.
 

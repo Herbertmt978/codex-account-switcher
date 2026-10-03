@@ -392,7 +392,7 @@ public struct CodexExecutableLocator: Sendable {
         let bin = URL(fileURLWithPath: local).appendingPathComponent("OpenAI/Codex/bin")
         let versions = (try? FileManager.default.contentsOfDirectory(at: bin,
             includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
-        for version in versions.sorted(by: {
+        for version in versions.filter({ !$0.lastPathComponent.hasPrefix(".staging-") }).sorted(by: {
             let left = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
             let right = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
             return left > right

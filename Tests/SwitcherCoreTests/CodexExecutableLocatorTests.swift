@@ -11,6 +11,7 @@ struct CodexExecutableLocatorTests {
 
         let local = root.appendingPathComponent("local")
         let installed = local.appendingPathComponent("OpenAI/Codex/bin/current/codex.exe")
+        let staging = local.appendingPathComponent("OpenAI/Codex/bin/.staging-current-incomplete/codex.exe")
         let pathCommand = root.appendingPathComponent("path/codex.exe")
         try FileManager.default.createDirectory(at: installed.deletingLastPathComponent(),
             withIntermediateDirectories: true)
@@ -18,6 +19,11 @@ struct CodexExecutableLocatorTests {
             withIntermediateDirectories: true)
         try Data().write(to: installed)
         try Data().write(to: pathCommand)
+        // Make the incomplete staging directory newer without setting Windows folder timestamps.
+        Thread.sleep(forTimeInterval: 0.05)
+        try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
+        try Data().write(to: staging)
 
         for override: String? in [nil, ""] {
             var environment = [
@@ -64,15 +70,22 @@ struct CodexExecutableLocatorTests {
             .appendingPathComponent("codex-path-tests-\(UUID())")
         defer { try? FileManager.default.removeItem(at: root) }
 
+        let local = root.appendingPathComponent("local")
+        let staging = local.appendingPathComponent("OpenAI/Codex/bin/.staging-current-incomplete/codex.exe")
         let pathCommand = root.appendingPathComponent("path/codex.exe")
+        try FileManager.default.createDirectory(at: staging.deletingLastPathComponent(),
+            withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: pathCommand.deletingLastPathComponent(),
             withIntermediateDirectories: true)
+        try Data().write(to: staging)
         try Data().write(to: pathCommand)
 
-        #expect(try CodexExecutableLocator().locate(environment: [
-            "LOCALAPPDATA": root.appendingPathComponent("missing-local").path,
-            "PATH": pathCommand.deletingLastPathComponent().path,
-        ]) == pathCommand)
+        for localPath in [root.appendingPathComponent("missing-local").path, local.path] {
+            #expect(try CodexExecutableLocator().locate(environment: [
+                "LOCALAPPDATA": localPath,
+                "PATH": pathCommand.deletingLastPathComponent().path,
+            ]) == pathCommand)
+        }
     }
     #endif
 }
