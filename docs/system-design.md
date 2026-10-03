@@ -265,10 +265,11 @@ The stage is held in memory only for progress and error messages.
 Lookup order:
 
 1. test-only explicit URL;
-2. the login shell's shared `CODEX_CLI_PATH`, resolved through its `PATH` when it is a command name;
-3. the login shell's `codex` command when no shared override is set.
+2. an explicit shared `CODEX_CLI_PATH`, resolved directly when it is a path or through `PATH` when it is a command name;
+3. on Windows, the newest Codex CLI installed by Codex Desktop when no shared override is set;
+4. the default `codex` command on `PATH` when no shared override is set and no installed Desktop CLI has been selected.
 
-The runtime version is never pinned. Each operation resolves the current system command. The same login-shell PATH is passed to app-server so npm launchers can resolve Node. A missing command or invalid explicit path is an error; the switcher does not silently start another bundled version.
+The runtime version is never pinned. Each operation resolves the current executable. Windows follows Codex Desktop updates in `%LOCALAPPDATA%\OpenAI\Codex\bin` by default; an explicit `CODEX_CLI_PATH` remains authoritative. The same PATH is passed to app-server so npm launchers can resolve Node. A missing command or invalid explicit override is an error.
 
 If not found, show one direct error:
 
