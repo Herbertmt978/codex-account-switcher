@@ -1,6 +1,8 @@
 using System.Security.AccessControl;
 using CodexAccountSwitcher.Core;
 
+if (args.FirstOrDefault() == "executable-lifetime") return ExecutableLifetimeChecks.Run();
+
 if (args.FirstOrDefault() == "app-server") {
     await RpcFixture.RunAsync();
     return 0;

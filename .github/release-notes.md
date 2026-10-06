@@ -1,6 +1,10 @@
 On Windows, the switcher now follows the Codex CLI installed by Codex Desktop when no `CODEX_CLI_PATH` override is set, so account and usage refreshes use the current Desktop runtime even when an older CLI appears earlier on `PATH`.
 Automatic discovery skips temporary Desktop staging directories.
 
+When the Codex runtime is missing or cannot start, the error now asks you to ensure Codex Desktop is updated and restart both apps before retrying. Startup diagnostic details remain available.
+
+The portable Windows switcher now protects its EXE from being moved, deleted or replaced while running, preventing later failures when .NET needs another bundled assembly. Quit the switcher before moving or replacing its EXE.
+
 A deliberate `CODEX_CLI_PATH` override takes precedence. A missing override command now reports an error rather than silently selecting the installed Desktop runtime.
 
 Installing the update does not switch accounts or close Codex.

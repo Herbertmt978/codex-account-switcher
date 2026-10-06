@@ -35,6 +35,14 @@ Desktop is located from the `OpenAI.Codex` Store manifest (its executable can be
 
 Both Desktop and Switcher must use the same active Codex home. Saved file credentials are protected by a current-user ACL. Windows credential writes use a private temporary file, flush and same-directory replacement. Symbolic links and junctions in credential paths are rejected. Settings and startup integration remain local.
 
+## Registration troubleshooting
+
+If Register Current Account reports that the Codex executable is missing or cannot start, ensure Codex Desktop is installed and updated, then restart Codex Desktop and Account Switcher and retry.
+
+The switcher displays update guidance for runtime discovery and startup failures and retains startup diagnostic details. If you configured `CODEX_CLI_PATH`, check that it still points to an available Codex executable. Missing credentials and other account errors keep their own messages.
+
+Keep the portable Account Switcher EXE in a stable local folder. Quit the switcher from its tray menu before moving or replacing it. The Windows app holds its executable open while running because .NET loads bundled assemblies on demand; moving the EXE can otherwise cause a later `FileNotFoundException`. This packaging failure is separate from a missing Codex runtime.
+
 ## Develop
 
 Install [Swift for Windows](https://www.swift.org/install/windows/) and its C++/Windows SDK dependencies, plus the [.NET 10 SDK](https://learn.microsoft.com/en-us/dotnet/core/install/windows).
@@ -44,6 +52,7 @@ swift test
 swift build -c release --product SwitcherHost
 $bin = swift build -c release --show-bin-path
 dotnet run --project windows/CodexAccountSwitcher.Checks -c Release -- "$bin/SwitcherHost.exe"
+dotnet run --project windows/CodexAccountSwitcher.Checks -c Release -- executable-lifetime
 dotnet run --project windows/CodexAccountSwitcher.UiChecks -c Release
 $env:CODEX_SWITCHER_HOST_PATH = "$bin/SwitcherHost.exe"
 dotnet run --project windows/CodexAccountSwitcher -c Release
