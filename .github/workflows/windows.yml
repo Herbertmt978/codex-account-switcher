@@ -69,6 +69,8 @@ jobs:
         run: node --test scripts/tests/*.test.mjs
       - name: Build Windows application
         run: dotnet build windows/CodexAccountSwitcher -c Release --nologo
+      - name: Check portable executable lifetime
+        run: dotnet run --project windows/CodexAccountSwitcher.Checks -c Release -- executable-lifetime
       - name: Check normal close and Store package path refresh
         shell: pwsh
         run: |

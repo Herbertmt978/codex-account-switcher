@@ -35,13 +35,15 @@ public partial class App : Application
     private MainWindow? window;
     private DispatcherTimer? updates;
     private bool exiting;
+    private FileStream? executableLifetime;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         if (!startRuntime) return;
-        if (e.Args.Contains("--self-test")) { await SelfTestAsync(); return; }
         try {
+            executableLifetime = ExecutableLifetime.Protect();
+            if (e.Args.Contains("--self-test")) { await SelfTestAsync(); return; }
             var dataPath = Environment.GetEnvironmentVariable("CODEX_SWITCHER_DATA_HOME")
                 ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Codex Account Switcher");
             var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(dataPath).ToUpperInvariant())));
@@ -157,5 +159,6 @@ public partial class App : Application
         activateWindow?.Dispose();
         if (ownsMutex) instance?.ReleaseMutex(); instance?.Dispose();
         base.OnExit(e);
+        executableLifetime?.Dispose();
     }
 }

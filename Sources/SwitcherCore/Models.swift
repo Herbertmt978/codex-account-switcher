@@ -287,9 +287,9 @@ public enum CodexClientError: LocalizedError, Equatable, Sendable {
     public var errorDescription: String? {
         switch self {
         case .executableNotFound:
-            "The Codex executable could not be found."
+            "The Codex executable could not be found. Please ensure Codex Desktop is installed and updated, then restart Codex Desktop and Account Switcher and try again."
         case let .processLaunchFailed(message):
-            "Codex app-server failed to start: \(message)"
+            "Codex app-server failed to start. Please ensure Codex Desktop is updated, then restart Codex Desktop and Account Switcher and try again.\n\nDetails: \(message)"
         case .malformedResponse:
             "Codex app-server returned malformed JSON."
         case let .remoteError(code, message):
